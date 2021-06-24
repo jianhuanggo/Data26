@@ -1,0 +1,133 @@
+from Daemon.Core.Type.base import base_daemon
+from Scoot.Utils import db
+from Daemon.Model import Threshold, Job, Job_Instance, Job_Task_Lock
+from sqlalchemy import and_, or_, not_, Integer, String, func
+from sqlalchemy.exc import CompileError, DatabaseError, IntegrityError, DataError
+from sqlalchemy.sql.expression import cast
+from types import SimpleNamespace
+from Scoot.Utils import parse
+
+
+class watcher(base_daemon):
+    def __init__(self, args):
+        super().__init__(args)
+
+    """
+    @provide_session
+    def run(self, session=None):
+        self.args.logger.info("Watcher class is working!")
+
+        query = session.query(Threshold).filter(Threshold.threshold_id == '0')
+        for _row in query.all():
+            self.args.logger.info(f"{str(_row.threshold_id)}, {_row.threshold_type}, {_row.threshold_value}, {_row.threshold_status}")
+
+        session.commit()
+        session.close()
+
+    """
+
+    @db.connect('meta')
+    def run(self, db_instance=None):
+        self.args.logger.info("Watcher class is working!")
+        deleted_row_not_found = False
+
+        try:
+            #query = db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL', cast(Job_Instance.try_num, Integer) < 3))
+
+            #db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL',
+            #                                         cast(Job_Instance.try_num, Integer) <= 3)).update({'status': 'NEW'})
+
+            #db_instance.session.query(Job_Instance).filter(cast(Job_Instance.job_instance_id, Integer) == 0).update({'status': 'NEW'})
+
+            #query = db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL', cast(Job_Instance.try_num, Integer) < 3))
+            #print(query)
+
+            delete_instance_id = []
+
+            query = db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL', Job_Instance.try_num <= 3))
+
+            for _row in query.all():
+                delete_instance_id.append(_row.job_instance_id)
+                db_instance.session.query(Job_Task_Lock).filter(Job_Task_Lock.job_instance_id == _row.job_instance_id).delete()
+
+            db_instance.session.commit()
+
+            for item in delete_instance_id:
+                if db_instance.session.query(Job_Task_Lock).filter(Job_Task_Lock.job_instance_id == item).one_or_none():
+                    deleted_row_not_found = True
+                    break
+
+            if deleted_row_not_found:
+                self.args.logger.critical(f"Job didn't deleted properly")
+                raise ("Job didn't deleted properly")
+
+            restart_query = db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL', Job_Instance.try_num < 3)).update({'status': 'NEW'})
+
+            db_instance.session.commit()
+
+            default_datafile_loc = SimpleNamespace(datafile_loc="")
+            loc = parse.ns_to_json(default_datafile_loc)
+
+            #restart_full_query = db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL',
+            #                                                                         Job_Instance.try_num == 3)).update({'status': 'NEW', 'system_parameter': str(loc),
+            #                                                                                                            'job_argument': func.replace(Job_Instance.job_argument,
+            #                                                                                                            'etl_mode:incr', 'etl_mode:full')})
+
+            restart_full_query = db_instance.session.query(Job_Instance).filter(and_(Job_Instance.status == 'FAIL',
+                                                                                     not_(Job_Instance.job_argument.contains(
+                                                                                                 'table_size:large')),
+                                                                                     Job_Instance.try_num == 3)).update(
+                                                                                    {'status': 'NEW',
+                                                                                     'system_parameter': str(loc),
+                                                                                     Job_Instance.job_argument: func.replace(Job_Instance.job_argument, 'etl_mode:incr', 'etl_mode:full')}, synchronize_session=False)
+
+            if restart_query or restart_full_query:
+                self.args.logger.info("Watcher found appropriate jobs and restarted them")
+            else:
+                self.args.logger.info("Not jobs need to be restarted")
+
+            db_instance.session.commit()
+
+            """
+            updated_rows = (
+    session.query(YourTable)
+    .filter(YourTable.your_field.like('%est%'))
+    .update({YourTable.your_field: func.replace(YourTable.your_field, 'from_str', 'to_str')},
+            synchronize_session=False)
+    )
+print("Updated {} rows".format(updated_rows))
+            
+            """
+
+
+            #for _row in update_query.all():
+            #    self.args.logger.info(f"Setting Job instance Id {str(_row.job_instance_id)} to run again")
+
+        except Exception as e:
+            #self.args.logger.critical(f"Could not restart {str(_row.job_instance_id)}")
+            print(e)
+            self.args.logger.critical(f"Could not restart jobs")
+
+        #db_instance.close()
+
+    @db.connect('meta')
+    def check_daemon_count(self, db_instance=None):
+        self.args.logger.info("Watcher class is working!")
+
+        query = db_instance.session.query(Threshold).filter(Threshold.threshold_id == '0')
+        for _row in query.all():
+            self.args.logger.info(f"{str(_row.threshold_id)}, {_row.threshold_type}, {_row.threshold_value}, {_row.threshold_status}")
+
+        db_instance.session.commit()
+
+def watcherm(args):
+    watcher(args).run()
+
+
+@db.connect('meta')
+def try1(db_instance=None):
+    db_instance.session.query(Job_Instance)
+
+
+if __name__ == '__main__':
+    try1()

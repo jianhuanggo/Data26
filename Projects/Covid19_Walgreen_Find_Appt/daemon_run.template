@@ -1,0 +1,31 @@
+def get_notified(message, filename_without_extension):
+
+    if not pgfile.isfileexist(filename_without_extension + ".data"):
+        with open(filename_without_extension + ".data", 'w') as file:
+            file.write(str(json.loads(message)['zipCode']))
+        zipcode = json.loads(message)['zipCode']
+    else:
+        with open(filename_without_extension + ".data", 'r') as file:
+            zipcode = file.read()
+
+    sms = pgtw.PGTwilio()
+    print(zipcode)
+    try:
+        message = json.loads(message)
+        if message['appointmentsAvailable']:
+            #sms.send_msg("630-276-6656", f"Message from Jian: appointmentsAvailable status has changed.  "
+            #                             f"Maybe walgreen appointment site for zipcode {zipcode} is open")
+            sms.send_msg("470-479-0771", f"Message from Jian: appointmentsAvailable status has changed.  "
+                                         f"Maybe walgreen appointment site for zipcode {zipcode} is open")
+            with open(filename_without_extension + ".log", "a") as file:
+                file.write("appointmentsAvailable is set to true, status message send...")
+            return True
+    except Exception as e:
+        #sms.send_msg("630-276-6656", f"Message from Jian: Unexpected output is detected.  "
+        #                             f"Maybe walgreen appointment site for zipcode {zipcode} is open")
+        sms.send_msg("470-479-0771", f"Message from Jian: Unexpected output is detected.  "
+                                     f"Maybe walgreen appointment site for zipcode {zipcode} is open")
+        with open(filename_without_extension + ".log", "a") as file:
+            file.write("exception caught, status message send...")
+        return True
+    return False

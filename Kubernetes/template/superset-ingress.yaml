@@ -1,0 +1,21 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  creationTimestamp: null
+  generation: 1
+  name: superset
+  selfLink: /apis/extensions/v1beta1/namespaces/data-analytics/ingresses/superset
+spec:
+  rules:
+  - host: superset.prod.corp.scoot.co
+    http:
+      paths:
+      - backend:
+          serviceName: superset
+          servicePort: 8088
+        path: /
+status:
+  loadBalancer: {}

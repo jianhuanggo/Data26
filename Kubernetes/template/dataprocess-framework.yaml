@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: dataprocess-framework-1
+  name: dataprocess-framework-1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dataprocess-framework-1
+  strategy:
+    rollingUpdate:
+      maxSurge: 3
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: dataprocess-framework-1
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: ngnix
+        ports:
+        - containerPort: 80
+          name: ngnix
+          protocol: TCP
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: dataprocess-framework
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      volumes:
+      - name: dataprocess-framework
+        persistentVolumeClaim:
+          claimName: dataprocess-framework

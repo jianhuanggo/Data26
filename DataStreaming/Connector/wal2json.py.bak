@@ -1,0 +1,154 @@
+from select import select
+import boto3
+import json
+import random
+import calendar
+import time
+from datetime import datetime
+from Scoot.Utils import file
+import logging
+import argparse
+import psycopg2
+from psycopg2.extras import LogicalReplicationConnection
+import sys
+
+_version_ = 0.1
+
+
+def get_parser():
+    try:
+        logging.debug('defining argparse arguments')
+
+        argparser = argparse.ArgumentParser(description='Postgresql Write-Ahead Logging (WAL) JSON Parser')
+        argparser.add_argument('-v', '--version', action='version', version='%(prog)s VERSION ' + str(_version_),
+                               help='show current version')
+        argparser.add_argument('-d', '--dbname', action='store', dest='database_name',
+                               required=True, help='The name of the database')
+        argparser.add_argument('-h', '--host', action='store', dest='host_name', required=True,
+                               help='The host name of the database')
+        argparser.add_argument('-u', '--username', action='store', dest='user_name', required=True,
+                               help='The user name to login to the database and have access to WAL plug-in')
+        argparser.add_argument('-p', '--password', action='store', dest='password', required=True,
+                               help='The password to login to the database')
+        logging.debug('parsing argparser arguments')
+        args = argparser.parse_args()
+
+    except Exception as err:
+        logging.critical("Error creating/parsing arguments:\n%s" % str(err))
+        sys.exit(100)
+
+    # print(args.daemon_type)
+    return args
+
+class PostgresLogParse:
+
+    def __init__(self):
+        self.stream_name = ""
+        #kinesis_client = boto3.client('kinesis', region_name='us-east-1')
+        self.my_connection  = psycopg2.connect("dbname='ddh3j8703l2puv' "
+                                               "host='jian-extention-test.cojwap6zlz3p.us-west-2.rds.amazonaws.com' "
+                                               "user='u3jp0qoj4h99rj' password='Zaqwsx567$$'"
+                                               ,connection_factory = LogicalReplicationConnection)
+        self._cur = self.my_connection.cursor()
+        #cur.drop_replication_slot('wal2json_test_slot')
+        #cur.create_replication_slot('wal2json_test_slot', output_plugin='wal2json')
+
+
+        self.count = 0
+        self.filename = open(file.get_random_filename('replication.log'), 'a')
+        self._cur.start_replication(slot_name = 'walslot', options={'pretty-print' : 1}, decode=True)
+        self.last_lsn = None
+        self.time_sleep = 0
+        self.current_time = datetime.now()
+
+    @property
+    def cur(self):
+        return self._cur
+
+    def consume(self, msg):
+        #kinesis_client.put_record(StreamName=my_stream_name, Data=json.dumps(msg.payload), PartitionKey="default")
+        #print (msg.payload)
+
+        json.dump(msg.payload, self.filename)
+
+
+    def persist_data(self):
+
+        while True:
+
+            try:
+                msg = self._cur.read_message()
+            except psycopg2.DatabaseError as e:
+                self._cur = self.my_connection.cursor()
+
+            if msg:
+                assert msg.cursor == self.cur
+                self.consume(msg)
+                self.count += 1
+                if self.count > 100000:
+                    try:
+                        self.filename.close()
+                        self.filename = open(file.get_random_filename('replication.log'), 'a')
+                        self.count = 0
+                    except:
+                        pass
+
+                msg.cursor.send_feedback(
+                    flush_lsn=msg.data_start,
+                    reply=True
+                )
+
+                self.last_lsn = msg.data_start
+
+            else:
+                now = datetime.now()
+                timeout = keepalive_interval - (now - self.cur.io_timestamp).total_seconds()
+                try:
+                    sel = select([self.cur], [], [], max(0, timeout))
+                    if not any(sel):
+                        self.cur.send_feedback()  # timed out, send keepalive message
+                except InterruptedError:
+                    pass  # recalculate timeout and continue
+
+            now = datetime.now()
+            time_diff = now - self.current_time
+            if time_diff.total_seconds() > 20:
+                print("send feedback again")
+                self._cur.send_feedback(
+                    flush_lsn=self.last_lsn,
+                    reply=True
+                )
+                self.current_time = now
+
+
+#cur.consume_stream(consume)
+
+
+if __name__ == '__main__':
+    args = get_parser()
+    keepalive_interval = 10.0
+    sol = PostgresLogParse()
+    sol.persist_data()
+    now = datetime.now()
+    time.sleep(10)
+    now1 = datetime.now()
+
+    diff = now1 - now
+    print(diff.total_seconds())
+    exit(0)
+    keepalive_interval = 10.0
+    sol = PostgresLogParse()
+    sol.persist_data()
+
+
+
+
+"""
+with open("test.txt", 'w', buffering=20*(1024**2)) as myfile:
+    for line in mydata:
+        myfile.write(line + '\n')
+
+        with open('personal.json', 'w') as json_file:
+            json.dump(my_details, json_file)
+
+"""

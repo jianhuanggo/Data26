@@ -1,0 +1,19 @@
+# Name of the system the check will be performed on, DataSource, RDS, or Redshift
+db_system: rds
+
+# Job Id, or it will randomly generated
+Jod_id: 60000
+
+# The SQL logic is used to perform data profiling
+query_condition: 'select count(1) from batteries'
+
+# The expected threshold
+threshold_value: 10000
+
+# value is either =, > or <
+matching_operator: greater
+
+
+
+
+

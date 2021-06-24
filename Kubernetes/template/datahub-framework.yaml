@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: datahub-framework
+  name: datahub-framework
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: datahub-framework
+  strategy:
+    rollingUpdate:
+      maxSurge: 3
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: datahub-framework
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: ngnix
+        ports:
+        - containerPort: 80
+          name: ngnix
+          protocol: TCP
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: datahub-framework
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      volumes:
+      - name: datahub-framework
+        persistentVolumeClaim:
+          claimName: datahub-framework

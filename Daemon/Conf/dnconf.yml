@@ -1,0 +1,7 @@
+## Required Environment Variable
+## Database type for metastore: mysql, postresql, oracle
+ENV_VAR_PREFIX: DAEMON_
+DAEMON_DATA_HOME: /Users/jianhuang/opt/anaconda3/envs/Data20/
+PYTHONPATH: /Users/jianhuang/opt/anaconda3/envs/Data20/Data20
+meta_type: postresql
+meta_name: meta

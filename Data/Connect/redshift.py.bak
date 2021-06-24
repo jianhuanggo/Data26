@@ -1,0 +1,84 @@
+import sqlalchemy
+from sqlalchemy.orm import sessionmaker, scoped_session
+from Scoot.Connect import base
+from Scoot.Config import config
+
+
+class ConnectRedshift(base.Base):
+
+    def __init__(self, args):
+        if not args:
+            conf = config.Config()
+            self._redshift_host = getattr(conf, 'SCOOT_REDSHIFT_HOST')
+            self._redshift_username = getattr(conf, 'SCOOT_REDSHIFT_USERNAME')
+            self._redshift_userpass = getattr(conf, 'SCOOT_REDSHIFT_PASS')
+            self._redshift_port = getattr(conf, 'SCOOT_REDSHIFT_PORT')
+            self._redshift_db = getattr(conf, 'SCOOT_REDSHIFT_DB')
+            self._redshift_url = getattr(conf, 'SCOOT_REDSHIFT_URL')
+        else:
+            self._redshift_host = args.redshift_host
+            self._redshift_username = args.redshift_username
+            self._redshift_userpass = args.redshift_userpass
+            self._redshift_port = args.redshift_port
+            self._redshift_db = args.redshift_db
+            self._redshift_url = args.redshift_url
+
+
+        try:
+            self._engine_args = dict()
+            self._engine_args['pool_size'] = 5
+            self._engine_args['pool_recycle'] = 3600
+            self._engine_args['encoding'] = 'utf-8'
+
+             # self._engine = sqlalchemy.create_engine(f"postgresql+psycopg2://postgres:MyPostPass@localhost/postgres", **self._engine_args)
+
+            self._engine = sqlalchemy.create_engine(f"postgresql+psycopg2://{self._redshift_username}:"
+                                                    f"{self._redshift_userpass}@{self._redshift_host}:"
+                                                    f"{self._redshift_port}/{self._redshift_db}", **self._engine_args)
+
+            # Construct a sessionmaker object
+            Session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=self._engine,
+                                                  expire_on_commit=False))
+
+
+            # Base.metadata.create_all(engine)
+            self._session = Session()
+            self._session.execute("select count(1) from pg_database")
+
+        except:
+            print('Exception: Error connect to database.')
+            # self.logger.critical('Exception: Error connecting metadata database.')
+            raise
+        else:
+            print(f"Connected to {self._redshift_db} on {self._redshift_host} with user: {self._redshift_username}")
+            # self.logger.info('Connected to metadata Database with user:' + 'postgres')
+
+
+        host = host + ':' + port
+        try:
+            connect_string = "postgresql+psycopg2://" + username + ":" + password + "@" + host + "/" + database
+
+            print(connect_string)
+            self._db_engine = sqlalchemy.create_engine(connect_string)
+            self.Session = scoped_session(sessionmaker(bind=self._db_engine))
+            self.Session.execute("select count(1) from pg_database")
+
+        except:
+            raise ("Cannot connect to Redshift database!")
+
+    def execute(self, query):
+        return self.Session.execute(query)
+
+    def get_table_list(self):
+        return self.Session.execute(f"select distinct trim(nspname) ||'.'|| trim(relname) table_name from stv_tbl_perm "
+                                    f"join pg_class on pg_class.oid = stv_tbl_perm.id "
+                                    f"join pg_namespace on pg_namespace.oid = relnamespace "
+                                    f"join pg_database on pg_database.oid = stv_tbl_perm.db_id "
+                                    f"and trim(nspname) = 'prod' order by 1;")
+
+    def get_db_metadata(self, table_name):
+        return self.execute(f"select table_name, column_name, data_type, character_maximum_length, numeric_precision, "
+                            f"numeric_scale FROM INFORMATION_SCHEMA.COLUMNS WHERE table_catalog = 'ddh3j8703l2puv' "
+                            f"AND table_name = '{table_name}' order by 1;").fetchall()
+
+

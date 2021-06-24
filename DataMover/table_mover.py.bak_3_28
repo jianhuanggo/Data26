@@ -1,0 +1,143 @@
+from DataMover.Core import move, cli
+from DataValidator.Core import validate
+from types import SimpleNamespace
+from Scoot.Utils import db
+import datetime
+from dateutil.parser import parse
+
+
+def run(command_args, system_parameter, logger=None):
+
+    #print(f"this is command args: {command_args}")
+    #print(f"this is system parameters: {system_parameter}")
+    new_args = SimpleNamespace(arguments='')
+    stage_object = f"stage_{command_args.source_object}"
+    if not hasattr(command_args, "stage_object") or not command_args.stage_object:
+        command_args.stage_object = stage_object
+
+    if hasattr(system_parameter, "highwatermark") and system_parameter.highwatermark:
+        command_args.highwatermark = system_parameter.highwatermark
+    else:
+        command_args.highwatermark = ''
+
+    new_args.arguments = SimpleNamespace(highwatermark=command_args.highwatermark,
+                                         source_system=command_args.source_system,
+                                         source_object=command_args.source_object,
+                                         target_system=command_args.target_system,
+                                         stage_object=command_args.stage_object,
+                                         target_object=command_args.target_object,
+                                         timestamp_col=command_args.timestamp_col,
+                                         key_col=command_args.key_col,
+                                         etl_mode=command_args.etl_mode,
+                                         optimize_level=command_args.optimize_level)
+
+    new_args.system_parameter = SimpleNamespace(datafile_loc=system_parameter.datafile_loc)
+    #print(f"the datafileloc: {new_args.system_parameter}")
+    #print(f"the highwatermark: {new_args.arguments.highwatermark}")
+    new_args.logger = logger
+
+    connection = move.Postgres2Redshift(new_args)
+    connection.setup_postgresql()
+    #connection.args.logger.info("Get table stats for validation purpose...")
+    logger.info("Get table stats for validation purpose...")
+    max_cdc_col1_src, max_cdc_col2_src, start_cnt = validate.start_end2end_count_validation(new_args.arguments)
+    logger.info(f"The number of records in source table is {int(start_cnt)}")
+    logger.info("Starting the data extraction process...")
+    #connection.args.logger.info("Starting the data extraction process...")
+    return_code, to_continue = connection.extract(optimize_level=int(new_args.arguments.optimize_level))
+
+    if not return_code:
+        return False, None
+
+    if to_continue:
+        logger.info("New data found or optimizer level is not set to 1")
+    else:
+        logger.info("Optimizer level is set to 1 and there is no difference")
+
+    if to_continue:
+        connection.upload_s3()
+        logger.info("Completed!")
+        connection.setup_redshift()
+        logger.info("Starting loading to target system...")
+        connection.copy2redshift(s3_bucket_location=connection.s3_bucket_location + connection.extract_filename,
+                                 tablename=new_args.arguments.stage_object, opt=new_args)
+        logger.info("Starting applying changes...")
+        if not connection.apply_change():
+            return False, None
+    else:
+        logger.info("Running optimized path...")
+
+    logger.info("Verifying data...")
+    #print("Helllo111111!!!!!!!!!!!")
+
+    #max_cdc_col1_tgt, max_cdc_col2_tgt, end_cnt = validate.end_end2end_count_validation(new_args.arguments)
+
+    e2e_validation = db.connect('redshift')(validate.end_end2end_count_validation)
+    max_cdc_col1_tgt, max_cdc_col2_tgt, end_cnt = validate.end_end2end_count_validation_v2(new_args)
+    #max_cdc_col1_tgt, max_cdc_col2_tgt, end_cnt = e2e_validation(new_args.arguments)
+
+
+    #print(type(max_cdc_col1_src))
+    #print(type(max_cdc_col2_src))
+
+    logger.info(f"The number of records in target table is {int(end_cnt)}")
+    hwm = min(max_cdc_col1_src, max_cdc_col2_src)
+    print(hwm)
+
+    #if str(max_cdc_col1_src) == 'not available' and str(max_cdc_col2_src) == 'not available':
+    #    hwm = ''
+    #elif str(max_cdc_col1_src) == 'not available' and str(max_cdc_col2_src) != 'not available':
+    #    hwm = str(max_cdc_col2_src)
+    #elif str(max_cdc_col2_src) == 'not available' and str(max_cdc_col1_src) != 'not available':
+    #    hwm = str(max_cdc_col1_src)
+    #else:
+    #    if max_cdc_col1_src >= max_cdc_col2_src:
+    #        hwm = str(max_cdc_col2_src)
+    #    else:
+    #        hwm = str(max_cdc_col1_src)
+
+
+
+    if start_cnt is None:
+        start_cnt = 0
+
+    if end_cnt is None:
+        end_cnt = 0
+
+    if int(start_cnt) <= int(end_cnt):
+        return True, SimpleNamespace(datafile_loc=connection.complete_path,
+                                     affected_rowcount=start_cnt,
+                                     highwatermark=str(hwm))
+    else:
+        return False, None
+
+
+if __name__ == '__main__':
+
+    args = cli.get_table_mover_parser()
+    args.stage_table = f"stage_{args.source_table}"
+    args.arguments = SimpleNamespace(highwatermark='',
+                                     source_object=args.source_table,
+                                     source_system='rds',
+                                     stage_object=args.stage_table,
+                                     target_object=args.target_table,
+                                     target_system='redshift',
+                                     timestamp_col='created_at,updated_at',
+                                     cdc_type='timestamp',
+                                     key_col=args.key_col,
+                                     etl_mode='full')
+
+    args.system_parameter = SimpleNamespace(datafile_loc='')
+    args.logger = None
+    conn = move.Postgres2Redshift(args)
+    conn.setup_postgresql()
+
+    conn.extract(optimize_level=0)
+    conn.upload_s3()
+
+    conn.setup_redshift()
+    print(conn.s3_bucket_location + conn.extract_filename)
+    conn.copy2redshift(s3_bucket_location=conn.s3_bucket_location + conn.extract_filename,
+                       tablename=args.arguments.stage_object,
+                       opt=args)
+    conn.apply_change()

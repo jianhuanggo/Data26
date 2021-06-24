@@ -1,0 +1,23 @@
+Install Splash
+
+docker pull scrapinghub/splash
+docker run -it -p 8050:8050 --rm scrapinghub/splash
+
+splashhub:  https://www.zyte.com/sign-up/
+python scrapy splash plugin: pip install scrapy-splash
+
+manual_test:
+scrapy shell
+fetch('https://www.beerwulf.com/en-gb/c/mixedbeercases')
+response
+response.css('title::text').get()
+response.css('h4::text').getall()
+
+-----
+scrapy shell with splash
+
+fetch('http://localhost:8050/render.html?url=https://www.beerwulf.com/en-gb/c/mixedbeercases')
+response.css('title::text').get()
+products = response.css('a.product.search-product.draught-product.notranslate.pack-product').get()
+products.css('h4::text').get()
+scrapy crawl beer -O beer.json

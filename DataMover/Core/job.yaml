@@ -1,0 +1,40 @@
+# Please specify the redshift username
+redshift_username: scootdata
+
+# Please specify the redshift password
+redshift_pass: password
+
+# Please specify the redshift database
+redshift_db: scootdw
+
+# Please specify the redshift port number
+redshift_port: 5439
+
+# Please specify the redshift schema name
+redshift_schema: public
+
+# Please specify the redshift table catalog
+redshift_table_catalog: scootdw
+
+# Please specify the table name in redshift which needs to be populated
+table_name: test_batteries
+
+# Please specify the path and name of the data file
+# Please also make sure the order of columns appear in the data file matches the order of column in the table
+data_file: my_data.csv
+
+# Please specify the location of s3 below
+s3_location: xxxx
+
+# Please specify s3 bucket access key
+# This is not required if iam role is setup
+s3_bucket_access_key:
+
+# Please specify s3 bucket secret key
+# This is not required if iam role is setup
+s3_bucket_secret_key:
+
+# Is the CSV file compressed using GZIP
+gzip: False
+
+

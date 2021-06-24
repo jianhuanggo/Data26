@@ -1,0 +1,401 @@
+# !/usr/bin/env python3
+
+from subprocess import Popen, PIPE, call, STDOUT
+from Scoot.Utils.db import validate_table_exist
+from Scoot.Utils.db import get_column_name_by_order
+from Scoot.Utils.file import get_random_filename
+from Scoot.Connect import postgresql
+import datetime
+import gzip
+import boto3
+import psycopg2
+import multiprocessing
+import time
+import random
+import os
+from multiprocessing import Queue
+from Scoot.Config import config
+from types import SimpleNamespace
+from Scoot.Logging import logging as log
+import logging
+import sys
+from Scoot.Utils import directory as dirFunc
+from Scoot.Utils import query as qy
+from Scoot.Utils import db
+
+loggingLevel = logging.INFO
+logging.basicConfig(level=loggingLevel)
+
+q = Queue()
+
+class Postgres2Redshift:
+
+    def __init__(self, args=None):
+
+        self.conf = config.Config()
+        if args:
+            self.args = args
+            self.args.parameters = self.conf.parameters
+            self.args.name = 'Data_Mover'
+
+        else:
+            raise ("Missing table and configuration info, please pass them into the object.")
+
+        #print(self.conf.parameters)
+        #print(dir(self.conf))
+
+
+        try:
+            self.args.logger = log.Logging(self.conf, logging_level=loggingLevel,
+                                           subject='{0} logger'.format(self.args.name)).getLogger(self.args.name)
+
+        except Exception as err:
+            logging.critical('unable to instantiate Daemon logger' + str(err))
+            sys.exit(300)
+
+        self._white_table_list = None
+        self._url = None
+        self._db_client_home = None
+        self._extract_filename = None
+        self._s3_bucket_location = getattr(self.conf, 'SCOOT_S3_BUCKET_LOC')
+        print(self._s3_bucket_location)
+        self.tablecount = {}
+        self.application_name = "data_mover"
+        self.args.logger.info("Environment variables loadded correctly")
+
+    @property
+    def s3_bucket_location(self):
+        return self._s3_bucket_location
+
+    @property
+    def extract_filename(self):
+        return self._extract_filename
+
+    def setup_postgresql(self, db_client_home):
+
+        self._postgresql_host = getattr(self.conf, 'SCOOT_RDS_POST_HOST')
+        self._postgresql_username = getattr(self.conf, 'SCOOT_RDS_POST_USERNAME')
+        self._postgresql_password = getattr(self.conf, 'SCOOT_RDS_POST_PASS')
+        self._post_port = getattr(self.conf, 'SCOOT_RDS_POST_PORT')
+        self._postgresql_database = getattr(self.conf, 'SCOOT_RDS_POST_DB')
+        #self._postgresql_url = getattr(self.conf, 'SCOOT_RDS_POST_URL')
+        self._postgresql_url = f"postgresql://{self._postgresql_username}:" \
+                               f"{self._postgresql_password}@{self._postgresql_host}/{self._postgresql_database}"
+        self._db_client_home = db_client_home
+        self.args.logger.info("Sucessfully initiated db connection to RDS...")
+
+    def setup_redshift(self):
+
+        self._redshift_host = getattr(self.conf, 'SCOOT_REDSHIFT_HOST')
+        self._redshift_user = getattr(self.conf, 'SCOOT_REDSHIFT_USERNAME')
+        self._redshift_pass = getattr(self.conf, 'SCOOT_REDSHIFT_PASS')
+        self._redshift_db = getattr(self.conf, 'SCOOT_REDSHIFT_DB')
+        self._redshift_port = getattr(self.conf, 'SCOOT_REDSHIFT_PORT')
+        #self._redshift_url = f"redshift://{self._redshift_user}:{self._redshift_pass}@" \
+                             #f"{self._redshift_host}:{self._redshift_port}/{self._redshift_db}"
+        self._redshift_url = f"postgresql://{self._redshift_user}:{self._redshift_pass}@{self._redshift_host}:{self._redshift_port}/{self._redshift_db}"
+        self.args.logger.info("Sucessfully initiated db connection to Data Warehouse...")
+
+
+    """
+    Key needs to be an integer
+    """
+
+    def extract_trunk_by_key(self, tablename, env, key, pgres_query_file=None):
+        time.sleep(random.randint(1, 3))
+        q.put(os.getpid())
+        sess = postgresql.ConnectPostgresql(self._postgresql_host, self._post_port, self._postgresql_username,
+                                            self._postgresql_password, self._postgresql_database)
+        result = sess.execute(f"select max({key}), min({key}) from {tablename}")
+        for item in result.fetchall():
+            print(item)
+
+    def multi_processing(self, func, num_process):
+
+        processes = []
+        for i in range(num_process):
+            t = multiprocessing.Process(target=func, args=(i,))
+            processes.append(t)
+            t.start()
+
+        for one_process in processes:
+            one_process.join()
+
+        mylist = []
+        while not q.empty():
+            mylist.append(q.get())
+
+    def extract(self, pgres_query_file=None):
+
+        #print(self.args)
+
+        extract_query = qy.query_builder(self.args.arguments, False)
+
+        column_list = get_column_name_by_order(self.args.arguments.source_object)
+        column_list.sort(key=lambda x: x[1])
+        self.args.column_list = column_list
+
+        column_list_str = "(" + ','.join([item[0] for item in column_list]) + ")"
+
+        #print(extract_query)
+        #in_qry = open(pgres_query_file, "r").read().strip().strip(';')
+        db_client_dbshell = f"{self._db_client_home.strip()}bin/psql"
+
+        header_str = ''
+        # if opt.ora_add_header:
+        #	header_str=' CSV HEADER'
+
+        limit = ''
+        #if opt.pgres_lame_duck > 0:
+        #    limit = 'LIMIT %d' % opt.pgres_lame_duck
+
+        quote = ''
+        #if opt.pgres_lame_duck > 0:
+        #    quote = 'QUOTE  \'%s\'' % opt.pgres_quote
+
+        #query = f"COPY (({tablename}) {limit}) TO STDOUT WITH DELIMITER ',' CSV {quote}"
+        # select count(1) from batteries where created_at >= '2019-02-25 19:56:10.085183' or updated_at >= '2019-02-25 19:56:10.085183'
+
+        query = f"COPY ({extract_query} {limit} ) TO stdout DELIMITER ',' CSV {quote}"
+
+
+        #query = f"COPY {tablename} {limit} TO stdout DELIMITER ',' CSV {quote}"
+        self.args.logger.info(f"Executing Data Extraction logic....")
+
+        try:
+            loadConf = [db_client_dbshell, self._postgresql_url, "-c", query]
+
+            save_directory = self.conf.parameters.get('SCOOT_DATA_HOME', '') + "/data/" + \
+                             self.application_name + '/' + self.args.arguments.source_object
+
+            dirFunc.createdirectory(save_directory)
+
+            file_name_save = "save" + get_random_filename(self.args.arguments.source_object) + ".csv"
+            complete_path = save_directory + "/" + file_name_save
+
+            with open(complete_path, 'w') as f:
+                p2 = Popen(loadConf, stdout=f)
+                p2.wait()
+
+            self._extract_filename = file_name_save
+            self._complete_path = complete_path
+
+        except Exception as err:
+            self.args.logger.info(f"Data Extraction process failed: {err}")
+
+        self.args.logger.info(f"Data Extraction is successfully completed and data is saved at {file_name_save}.")
+
+
+    def extract_streaming(self, tablename, env, pgres_query_file=None):
+
+        db_client_dbshell = f"{self._db_client_home.strip()}bin/psql"
+        print(db_client_dbshell)
+
+        header_str = ''
+        # if opt.ora_add_header:
+        #	header_str=' CSV HEADER'
+
+        limit = ''
+        # if opt.pgres_lame_duck > 0:
+        #    limit = 'LIMIT %d' % opt.pgres_lame_duck
+
+        quote = ''
+        # if opt.pgres_lame_duck > 0:
+        #    quote = 'QUOTE  \'%s\'' % opt.pgres_quote
+
+        # query = f"COPY (({tablename}) {limit}) TO STDOUT WITH DELIMITER ',' CSV {quote}"
+
+        query = f"COPY {tablename} {limit} TO stdout DELIMITER ',' CSV {quote}"
+
+        print(query)
+        loadConf = [db_client_dbshell, self._postgresql_url, "-c", query]
+        print(loadConf)
+
+
+        p1 = Popen(loadConf, stdout=PIPE, stderr=PIPE)
+
+        #f = open("my_table111.csv.gz", "w")
+        # p1 = call(loadConf, stdout=f)    works
+
+
+        self._extract_filename = get_random_filename(tablename) + ".csv.gz"
+        compressor = gzip.GzipFile(self._extract_filename, mode='w')
+        i = total_size = 0
+
+        while True:  # until EOF
+            i += 1
+            start_time = datetime.datetime.now()
+            #print(start_time)
+            #chunk = p1.read(opt.s3_write_chunk_size)
+            chunk = p1.stdout.read(8192)
+            if not chunk:  # EOF?
+                compressor.close()
+                #uploadPart()
+                #mpu.complete_upload()
+
+                break
+            compressor.write(chunk)
+            total_size += len(chunk)
+
+            # print(compressor.tell())
+            # print(len(chunk),opt.s3_write_chunk_size)
+        print(f"{len(chunk)} chunk {i} [{(datetime.datetime.now() - start_time)} sec]")
+
+    def upload_s3(self):
+
+        s3_bucket_access_key = getattr(self.conf, 'SCOOT_S3_BUCKET_ACCESS_KEY')
+        s3_bucket_secret_key = getattr(self.conf, 'SCOOT_S3_BUCKET_SECRET_KEY')
+
+        try:
+            session = boto3.Session(
+                aws_access_key_id=s3_bucket_access_key,
+                aws_secret_access_key=s3_bucket_secret_key,
+            )
+
+            s3_resource = session.resource('s3')
+
+            if self._s3_bucket_location[-1] == '/':
+                s3_bucket_location = self._s3_bucket_location[:-1]
+            else:
+                s3_bucket_location = self._s3_bucket_location
+
+            s3_resource.meta.client.upload_file(self._complete_path, s3_bucket_location, self._extract_filename)
+
+        except Exception as err:
+            raise(f"Something wrong while uploading file to S3: {err}")
+
+        self.args.logger.info(f"Data has been loaded to S3 bucket {self._s3_bucket_location}"
+                              f"{self._extract_filename} sucessfully!")
+
+    @db.connect('redshift')
+    def copy2redshift(self, s3_bucket_location: str, source_tablename: str, target_tablename: str, opt, isgzip=False, db_instance=None, apply_mode=None) ->None:
+
+        print(apply_mode)
+        exit(0)
+        fn = f"s3://{s3_bucket_location}"
+        quote = ''
+
+        opt.red_quote = 0
+        opt.red_ignoreheader = 0
+        opt.red_timeformat = 0
+
+        prefix_table_name = target_tablename.split('_')[0]
+
+        if prefix_table_name != 'test':
+            print(f"We are in testing mode, please include only testing table")
+            exit(0)
+
+        opt.red_to_table = target_tablename
+
+        opt.red_col_delim = ','
+
+        if opt.red_quote:
+            quote = 'quote \'%s\'' % opt.red_quote
+        ignoreheader = ''
+        if opt.red_ignoreheader:
+            ignoreheader = 'IGNOREHEADER %s' % opt.red_ignoreheader
+        timeformat = ''
+        if opt.red_timeformat:
+            # timeformat=" dateformat 'auto' "
+            timeformat = " TIMEFORMAT '%s'" % opt.red_timeformat.strip().strip("'")
+
+        redshift_access_key = getattr(self.conf, 'SCOOT_REDSHIFT_ACCESS_KEY')
+        redshift_secret_key = getattr(self.conf, 'SCOOT_REDSHIFT_SECRET_KEY')
+
+        if isgzip:
+            set_gzip = "GZIP"
+        else:
+            set_gzip = ""
+
+        #CREDENTIALS 'aws_access_key_id=%s;aws_secret_access_key=%s'
+
+        column_list = get_column_name_by_order(source_tablename)
+        column_list.sort(key=lambda x: x[1])
+        column_list_str = "(" + ','.join([item[0] for item in column_list]) + ")"
+
+        arg_column_list_str = "(" + ','.join([item[0] for item in self.args.column_list]) + ")"
+
+        print(column_list_str)
+        print(arg_column_list_str)
+
+        exit(0)
+
+        sql = """
+        COPY %s %s FROM '%s' 
+        	iam_role 'arn:aws:iam::085201521026:role/RedShiftS3'
+        	DELIMITER '%s' 
+        	FORMAT CSV %s 
+        	%s
+        	%s 
+        	%s; 
+        	COMMIT;
+        """ % (opt.red_to_table, column_list_str, fn, opt.red_col_delim, set_gzip, quote, timeformat, ignoreheader)
+
+        print(sql)
+
+
+        """
+        try:
+            print(f"This is the exception0000")
+
+            con = psycopg2.connect(dbname=self._redshift_db, host=self._redshift_host, port=self._redshift_port,
+                                   user=self._redshift_user, password=self._redshift_pass)
+
+            print(f"This is the exception1111")
+
+            cur = con.cursor()
+
+            print(f"This is the exception2222")
+
+            cur.execute(sql)
+
+        except Exception as err:
+            self.args.logger.info(f"Error in connecting Redshift {err}")
+            print(f"This is the exception {err}")
+            raise ("Error in connecting Redshift...")
+
+        finally:
+            con.close()
+
+        """
+        try:
+            db_client_dbshell = f"{self._db_client_home.strip()}bin/psql"
+            loadConf = [db_client_dbshell, self._redshift_url, "-c", sql]
+            print(loadConf)
+
+            p2 = Popen(loadConf)
+            p2.wait()
+        except Exception as err:
+            self.args.logger.info(f"Error in connecting Redshift {err}")
+            raise ("Error in loadding data to Redshift...")
+
+        self.args.logger.info(f"Data has been loaded to {opt.red_to_table} successfully!")
+
+
+if __name__ == '__main__':
+    conn = Postgres2Redshift()
+
+
+    conn = Postgres2Redshift()
+    conn.setup_postgresql("/usr/local/")
+
+    args1 = SimpleNamespace(highwatermark='2019-02-25 19:56:10.085183',
+                            timestamp_col=['created_at', 'updated_at'],
+                            tablename='batteries')
+
+    args2 = SimpleNamespace(highwatermark=None,
+                            timestamp_col=['created_at', 'updated_at'],
+                            tablename='batteries')
+
+    conn.extract(args1.tablename, args1)
+
+    conn.upload_s3()
+
+    conn.setup_redshift()
+
+    args=SimpleNamespace(source_system='rds',
+                         source_object='batteries',
+                         target_system='redshift',
+                         target_object='test_batteries')
+
+    conn.copy2redshift(conn.s3_bucket_location + conn.extract_filename, args.source_object, args.target_object, args)

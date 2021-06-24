@@ -1,0 +1,17 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+  name: zeppelin-ingress
+spec:
+  rules:
+  - host: zeppelin.prod.corp.scoot.co
+    http:
+      paths:
+      - backend:
+          serviceName: zeppelin-service 
+          servicePort: 8080
+        path: /
+status:
+  loadBalancer: {}

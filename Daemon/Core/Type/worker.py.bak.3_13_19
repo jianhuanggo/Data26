@@ -1,0 +1,237 @@
+from Daemon.Core.Type.base import base_daemon
+from Scoot.Utils import db
+from Daemon.Model import Job
+from Daemon.Model import Job_Instance
+from Daemon.Model import Job_Task_Lock, Job_Task_Check
+from sqlalchemy import and_, or_, not_, Integer, String
+from sqlalchemy.exc import CompileError, DatabaseError, IntegrityError, DataError
+from sqlalchemy.sql.expression import cast
+from sqlalchemy import func
+import time
+from Daemon.Task import task
+import datetime
+from types import SimpleNamespace
+
+
+class worker(base_daemon):
+    def __init__(self, args):
+        super().__init__(args)
+
+    """
+    @provide_session
+    def run(self, session=None):
+        self.args.logger.info("Worker class is working!")
+        query = session.query(Job).filter(Job.hold_flag == '0')
+        for _row in query.all():
+            self.args.logger.info(f"{str(_row.job_id)}, {_row.job_name}")
+
+            session.add(Job_Instance(_row.job_id,
+                                     _row.job_name, _row.schedule_id,
+                                     _row.priority_value, _row.server_node,
+                                     _row.hold_flag, '0'))
+            session.commit()
+        session.close()
+    """
+
+    """
+    @db.connect('meta')
+    def run(self, db_instance=None):
+        print(self.args.conf.parameters)
+        self.args.logger.info("Worker class is working!")
+        query = db_instance.session.query(Job).filter(Job.hold_flag == '0')
+        for _row in query.all():
+            self.args.logger.info(f"{str(_row.job_id)}, {_row.job_name}")
+
+            db_instance.session.add(Job_Instance(_row.job_id,
+                                     _row.job_name, _row.schedule_id,
+                                     _row.priority_value, _row.server_node,
+                                     _row.hold_flag, '0'))
+            db_instance.session.commit()
+        db_instance.session.close()
+        
+    """
+
+    @db.connect('meta')
+    def task_selection(self, db_instance=None):
+        #print(self.args.conf.parameters)
+        self.args.logger.info("Start Task Selection Process...")
+
+        db_instance.session.rollback()
+        query = db_instance.session.query(Job_Instance).join(Job, Job_Instance.job_id == Job.job_id).filter(and_(Job_Instance.hold_flag == '0',
+                                                             Job_Instance.ignore_flag == '0', Job.hold_flag == '0'),
+                                                             Job_Instance.status == 'NEW').order_by(cast(Job_Instance.priority_value, Integer),
+                                                                                                    cast(Job_Instance.job_instance_id, Integer))
+        row = None
+        #print(query)
+        for _row in query.all():
+            self.args.logger.info(f"{str(_row.job_id)}, {_row.job_name}")
+            #print(_row)
+
+            try:
+                db_instance.session.add(Job_Task_Lock(_row.job_instance_id,
+                                                      _row.job_id,
+                                                      _row.job_name,
+                                                      self.args.daemon_name))
+                if db_instance.commit():
+                    row = _row
+                    break
+
+            except:
+                pass
+
+        if row:
+            self.args.logger.info(f"Job {row.job_name} with instance id {row.job_instance_id} is selected")
+            #print(f"{row.job_instance_id} and {row.job_id} and {row.job_name}")
+            #'job_comment': self.args.pid
+            try:
+                #print(row.try_num)
+                #new_try_num = int(row.try_num) + 1
+                #db_instance.session.query(Job_Instance).filter(Job_Instance.job_instance_id ==
+                                                               #str(row.job_instance_id)).update({'status': 'RUN',
+                                                                                                 #'job_comment': self.args.daemon_name,
+                                                                                                 #'try_num': str(new_try_num)})
+
+                row.status = 'RUN'
+                self.task_status_update(row)
+                db_instance.commit()
+
+            except (CompileError, IntegrityError, DatabaseError) as err:
+                row.status = 'FAIL'
+                self.task_status_update(row)
+
+                #db_instance.session.query(Job_Instance).filter(Job_Instance.job_instance_id == str(row.job_instance_id)).update(
+                    #{'status': 'FAIL'})
+                self.args.logger.info(f"Could not set job instance id {row.job_instance_id} status to 'RUN'")
+                raise (f"something wrong with the update statement {err}!")
+
+            #stmt = Job_Instance.update().values(status='RUNNING').where(Job_Instance.job_instance_id == row.job_instance_id)
+            #print(stmt.statement.compile(db_instance.engine))
+
+        #db_instance.close()
+
+        return row
+
+
+        #task = SimpleNamespace(job_instance_id='row.job_instance_id', job_id='row.job_')
+
+    @db.connect('meta')
+    def task_checking(self, task, db_instance=None):
+        self.args.logger.info("Start Task Checking Process")
+        #print(task)
+        if not task:
+            db_instance.session.close()
+            return
+
+        try:
+            db_instance.session.add(Job_Task_Check(task.job_instance_id, task.job_id, task.job_name, task.job_comment))
+            #db_instance.session.query(Job_Instance).filter(Job_Instance.job_instance_id == str(task.job_instance_id)).update(
+                #{'status': 'RUN'})
+            db_instance.session.commit()
+            self.args.logger.info(f"Successfully writing log record to table scd_job_task_check with instance id "
+                                  f"{task.job_instance_id}")
+
+        except (DatabaseError, DataError, IntegrityError) as err:
+            self.args.logger.critical(f"Could not write log record to table scd_job_task_check with instance id "
+                                      f"{task.job_instance_id}")
+            raise (f"There is something wrong with inserting into Task Checking table {err}")
+
+        #finally:
+        #    db_instance.close()
+
+    @db.connect('meta')
+    def task_status_update(self, job_task, db_instance=None):
+        self.args.logger.info(f"{job_task.status}")
+        if not hasattr(job_task, "affected_rowcount") or job_task.affected_rowcount is None:
+            job_task.affected_rowcount = 0
+        now = str(datetime.datetime.now())
+        try:
+            if job_task.status == 'RUN':
+                print(f"try_num is {job_task.try_num}")
+                new_try_num = int(job_task.try_num) + 1
+                db_instance.session.query(Job_Instance).filter(
+                    Job_Instance.job_instance_id == str(job_task.job_instance_id)). \
+                    update({'status': str(job_task.status), 'time_updated': now,
+                            'end_time': now, 'try_num': str(new_try_num), 'job_comment': self.args.daemon_name})
+            else:
+                db_instance.session.query(Job_Instance).filter(Job_Instance.job_instance_id == str(job_task.job_instance_id)).\
+                                    update({'status': str(job_task.status), 'time_updated': now,
+                                    'end_time': now, 'affected_row_count': str(job_task.affected_rowcount)})
+            db_instance.session.commit()
+            self.args.logger.info(f"Successfully updated job instance with instance id {job_task.job_instance_id}")
+
+        except Exception as err:
+            self.args.logger.critical(f"Could not update status table {err}")
+            raise (f"There is something wrong with update status in Job Task Instance table {err}")
+
+        #finally:
+        #    db_instance.close()
+
+
+    @db.connect('meta')
+    def run(self, db_instance=None):
+        current_task = self.task_selection()
+
+        if current_task:
+            self.args.logger.info(f"This is the task: task command={current_task.job_command}, "
+                                  f"task argument='{current_task.job_argument}'")
+
+            # Setting default value for task attributes
+            current_task.affected_rowcount = 0
+            current_task.delta_file_loc = '0'
+            
+            try:
+                self.task_checking(current_task)
+                #self.args.logger.info(f"{current_task.job_type}, {current_task.job_command}, {current_task.job_argument}")
+
+
+                affected_rowcount = task.selector(current_task.job_command)(current_task.job_argument, self.args.logger)
+                self.args.logger.info(affected_rowcount)
+                if not affected_rowcount:
+                    current_task.affected_rowcount = int(affected_rowcount)
+
+                #current_task.affected_rowcount = int(affected_rowcount)
+                if affected_rowcount:
+                #if task.selector(current_task.job_command)(current_task.job_argument, self.args.logger):
+                    time.sleep(1)
+                    current_task.status = 'DONE'
+                    self.task_status_update(current_task)
+                    self.args.logger.info(f"This task is completed: {current_task.job_instance_id} "
+                                          f"and {current_task.status}")
+                else:
+                    current_task.status = 'FAIL'
+                    self.task_status_update(current_task)
+                    self.args.logger.info(f"End to end validation has failed.....")
+
+            except Exception as err:
+                current_task.status = 'FAIL'
+                self.task_status_update(current_task)
+                self.args.logger.critical(f"Something wrong with running command {current_task.job_command}")
+                raise ("Something wrong with running command")
+
+            #finally:
+            #    db_instance.close()
+
+            return
+        else:
+            self.args.logger.info(f"This task is completed: Nothing to process")
+
+
+def workerm(args):
+    worker(args).run()
+
+
+@db.connect('meta')
+def try_run(db_instance=None):
+    stmt = db_instance.session.query(Job_Instance).filter(Job_Instance.job_instance_id == '10').update({'job_name': 'ok', 'status': 'DONE'})
+    print(stmt)
+
+@db.connect('meta')
+def try_run1(db_instance=None):
+    query = db_instance.session.query(Job_Instance).join(Job, Job_Instance.job_id == Job.job_id).filter(
+            and_(Job_Instance.hold_flag == '0', Job_Instance.ignore_flag == '0', Job.hold_flag == '0'),
+            Job_Instance.status == 'NEW').order_by(cast(Job_Instance.priority_value, Integer),
+                                                   cast(Job_Instance.job_instance_id, Integer))
+
+    print(query)
+
+

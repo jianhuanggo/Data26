@@ -1,0 +1,6 @@
+R0.0.2 03272021
+improve configuration (added configparser module)
+improve unit testing (added unittest module)
+implemented localstorage with support of multiprocessing
+implemented a simple blockchain format
+added excel as storage format

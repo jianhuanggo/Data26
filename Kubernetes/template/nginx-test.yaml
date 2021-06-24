@@ -1,0 +1,42 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: staging-nginx-test
+  name: staging-nginx-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: staging-nginx-test
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: staging-nginx-test
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: ngnix
+        ports:
+        - containerPort: 80
+          name: ngnix
+          protocol: TCP
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /data
+          name: nginx-test
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      volumes:
+      - name: nginx-test
+        persistentVolumeClaim:
+          claimName: nginx-test

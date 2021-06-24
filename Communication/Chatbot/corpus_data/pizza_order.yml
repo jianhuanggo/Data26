@@ -1,0 +1,11 @@
+categories:
+- greetings
+conversations:
+- - Hello
+  - Hi
+- - Hi
+  - Hello
+- - Hi
+  - Hola
+- - Greetings!
+  - Hi

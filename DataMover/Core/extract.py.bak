@@ -1,0 +1,162 @@
+from Scoot.Connect import meta
+from Scoot.Connect import postgresql
+from multiprocessing import Queue
+from subprocess import Popen
+from Scoot.Utils import file
+import multiprocessing
+from Scoot.Connect import redshift
+from Scoot.Connect import s3
+from pathos.multiprocessing import ProcessingPool as Pool
+from Scoot.Utils import file
+import sys
+
+global_queue = Queue()
+
+class Extract:
+    def __init__(self, source, target):
+        self._source = source
+        self._target = target
+        self._source_obj = meta.meta_lookup(source)
+        self._target_obj = meta.meta_lookup(target)
+        self._task_list = []
+        self._db_client_dbshell = f"/usr/local/bin/psql"
+        self._sess = postgresql.ConnectPostgresql("oregon-read-only.ccfrcisbix7u.us-west-1.rds.amazonaws.com", "5432", "ddh3j8703l2puv", "u3jp0qoj4h99rj", "p15d5eh2gahoo6ck2gn6qiocavp")
+
+
+    @property
+    def source_obj(self):
+        return self._source_obj
+
+    @property
+    def target_obj(self):
+        return self._target_obj
+
+    @property
+    def task_list(self):
+        return self._task_list
+
+    def multi_extract(self, post_url, tablename, key, func="split_key"):
+        global global_queue
+
+
+        #time.sleep(random.randint(1, 3))
+        #q.put(os.getpid())
+        #print("[{0}] Hello!")
+        #sess = postgresql.ConnectPostgresql("oregon-read-only.ccfrcisbix7u.us-west-1.rds.amazonaws.com", "5432", "ddh3j8703l2puv", "u3jp0qoj4h99rj",
+        #                                    "p15d5eh2gahoo6ck2gn6qiocavp")
+
+        #conn.setup_postgresql("oregon-read-only.ccfrcisbix7u.us-west-1.rds.amazonaws.com", "u3jp0qoj4h99rj",
+        #                      "p15d5eh2gahoo6ck2gn6qiocavp", "ddh3j8703l2puv", "5432", ["answers"], "/usr/local/")
+
+        result = self._sess.execute(f"select max({key}), min({key}) from {tablename}")
+        item = result.fetchall()
+
+
+        min_val = item[0][1]
+        max_val = item[0][0]
+
+        #print(max_val, min_val)
+
+        #exit(0)
+
+
+        db_client_dbshell = f"/usr/local/bin/psql"
+        print(db_client_dbshell)
+        limit = ''
+        quote = ''
+        interval = 100
+
+        task_list = []
+        i = min_val
+        while i < max_val:
+        #for i in range(min_val, max_val):
+            query_list =[]
+            #an = [i, i + interval]
+            #global_queue.put(an)
+            validation_query = f"select count(1) from {tablename} where id between {i} and {i + interval} {limit}"
+            query = f"COPY (select * from {tablename} where id between {i} and {i + interval}) {limit} TO stdout DELIMITER ',' CSV {quote}"
+            query_list.append(tablename)
+            query_list.append(validation_query)
+            query_list.append(query)
+
+            #global_queue.put(query)
+            task_list.append(query_list)
+            i += interval
+        return task_list
+
+
+    @classmethod
+    def run(cls, query_list):
+        #task = global_queue.get()
+        print(query_list)
+
+        sess = postgresql.ConnectPostgresql("oregon-read-only.ccfrcisbix7u.us-west-1.rds.amazonaws.com", "5432",
+                                                  "ddh3j8703l2puv", "u3jp0qoj4h99rj", "p15d5eh2gahoo6ck2gn6qiocavp")
+        query_result = sess.execute(query_list[1])
+        result = query_result.fetchall()
+        table_count = result[0][0]
+
+        db_client_dbshell = f"/usr/local/bin/psql"
+
+        #loadConf = ["echo", "hello"]
+        loadConf = [db_client_dbshell, post_url, "-c", query_list[2]]
+
+        try:
+            file_name_save = "save" + file.get_random_filename(query_list[0]) + ".csv"
+            f = open(file_name_save, "w")
+            #p2 = Popen(loadConf)
+            p2 = Popen(loadConf, stdout=f)
+            p2.wait()
+
+        except Exception as e:
+            raise (f"something is wrong {e}\n")
+            exit(1)
+        finally:
+            f.close()
+
+        file_count = file.file_len(file_name_save)
+
+        if table_count == file_count:
+            print("It matches!")
+            return True
+        else:
+            print("It doesn't!")
+            return False
+
+
+
+        """
+        while not global_queue.empty():
+            b = global_queue.get()
+            query = f"COPY (select * from {tablename} where id between {b[0]} and {b[1]}) {limit} TO stdout DELIMITER ',' CSV {quote}"
+            print(query)
+
+            loadConf = [db_client_dbshell, post_url, "-c", query]
+
+            try:
+                file_name_save = "save" + get_random_filename(tablename) + ".csv"
+                f = open(file_name_save, "w")
+                p2 = Popen(loadConf, stdout=f)
+                p2.wait()
+            except Exception as e:
+                raise (f"something is wrong {e}\n")
+                exit(1)
+        """
+
+if __name__ == '__main__':
+    ext = Extract('postgresql', 's3')
+    print(ext.source_obj)
+    print(ext.target_obj)
+    post_url = "postgres://u3jp0qoj4h99rj:p15d5eh2gahoo6ck2gn6qiocavp@oregon-read-only.ccfrcisbix7u.us-west-1.rds.amazonaws.com:5432/ddh3j8703l2puv"
+    task_list = ext.multi_extract(post_url, "admins", "id")
+
+    print(multiprocessing.cpu_count())
+
+    # p = multiprocessing.Pool(4)
+    p = Pool(4)
+    result = p.map(ext.run, task_list)
+    p.map
+    p.close()
+    p.join()
+
+    print(result)

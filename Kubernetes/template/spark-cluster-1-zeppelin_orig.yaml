@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    chart: spark-0.2.1
+    component: spark-cluster-1-zeppelin
+    heritage: Tiller
+    release: spark-cluster-1
+  name: spark-cluster-1-zeppelin
+  selfLink: /api/v1/namespaces/data-analytics/services/spark-cluster-1-zeppelin
+spec:
+  externalTrafficPolicy: Cluster
+  ports:
+  - name: http
+    nodePort: 30598
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    component: spark-cluster-1-zeppelin
+  sessionAffinity: None
+  type: LoadBalancer
+status:
+  loadBalancer: {}

@@ -1,0 +1,6 @@
+species, island, bill_length_nm, bull_depth_nm, flipper_length_nm, body_mass_g, sex, year
+Adelie, Torgersen, 39.1, 18.7, 181.0, 3750.0, male, 2007
+Adelie, Torgersen, 40.3, 18.0, 195.0, 3250.0, female, 2007
+Adelie, Torgersen, , , , , , 2007
+Adelie, Torgersen, 36.7, 19.3, 193.0, 3450.0, female, 2007
+Adelie, Torgersen, 38.9, 17.8, 181.0, 3625.0, female, 2007

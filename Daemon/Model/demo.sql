@@ -1,0 +1,5 @@
+insert into metaschema.scd_job values ('1', 'test', '0', '10', '127.0.0.1', '0', NOW(), NOW())
+insert into metaschema.scd_job values ('2', 'test1', '0', '10', '127.0.0.1', '0', NOW(), NOW())
+insert into metaschema.scd_job values ('3', 'test3', '0', '10', '127.0.0.1', '0', NOW(), NOW())
+insert into metaschema.scd_job_instance values ('2', '2', 'test1', '0', '10', '127.0.0.1', '1', '1', NOW(), NOW(), NOW(), NOW())
+insert into metaschema.scd_job_instance values ('3', '3', 'test3', '0', '10', '127.0.0.1', '1', '1', NOW(), NOW(), NOW(), NOW())
