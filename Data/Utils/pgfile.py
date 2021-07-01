@@ -13,10 +13,8 @@ def create_temp_file(size, file_name, file_content):
     return random_file_name
 
 
-def get_random_filename(file_name):
-    random_file_name = '_'.join([str(uuid.uuid4().hex[:8]), file_name])
-    return random_file_name
-
+def get_random_filename(file_name: str) -> str:
+    return '_'.join([str(uuid.uuid4().hex[:8]), file_name])
 
 def get_random_string():
     return str(uuid.uuid4().hex[:8])

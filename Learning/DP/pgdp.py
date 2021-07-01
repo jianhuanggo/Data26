@@ -15,7 +15,6 @@ from pydantic.generics import GenericModel
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
-
 __version__ = "1.7"
 
 DataFrame = TypeVar('DataFrame')
@@ -48,6 +47,7 @@ def pgdp_scaler(capacity: float, val: [pd.DataFrame, list]) -> Tuple[int, list]:
 def pgdp2_withassignment(capacity: float, items: pd.DataFrame, _logger=None) -> Union[Tuple[int, list], None]:
 
     try:
+        print(f"item: {items}")
         _capacity, _cost = pgdp_scaler(capacity, items.iloc[:, 1])
         _value = items.iloc[:, 2]
 
@@ -141,6 +141,7 @@ class PGLearningDP(pglearningbase.PGLearningBase, pglearningcommon2.PGLearningCo
 
     def _process(self, capacity: float, items: pd.DataFrame, *args, **kwargs) -> Union[Tuple[int, list], None]:
         try:
+            self._input_name = items['rides'].to_list()
             return pgdp2_withassignment(capacity, items, self._logger)
 
         except Exception as err:
@@ -190,10 +191,14 @@ if __name__ == '__main__':
     #test = pd.read_csv('test.csv', header=0)
     test = PGLearningDP()
     ### name and capacity is required number
-    test.get_tasks('test.csv', {'capacity': 2, 'name': 'test'})
-    test.get_tasks('test.csv', {'capacity': 2, 'name': 'test1'})
+    test.get_tasks('test5.csv', {'capacity': 10, 'name': 'disney rides optimization'})
+    #test.get_tasks('test.csv', {'capacity': 2, 'name': 'test1'})
     test.process()
-    print(test.data)
+    for key, val in test.data.items():
+        print(f"task: {key}")
+        print(f"total score: {val[0]}\nrides: \n")
+        for item in val[1]:
+            print(test._input_name[item])
 
 
 

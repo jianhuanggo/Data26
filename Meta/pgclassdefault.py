@@ -103,6 +103,17 @@ class PGClassDefault:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             sys.exit(99)
 
+    def clean_profile(self) -> bool:
+        try:
+            for key, val in self._parameter.items():
+                if isinstance(val, str):
+                    self._parameter[key] = val.strip('\"').strip('\'')
+            return True
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            sys.exit(99)
+
 
 
 

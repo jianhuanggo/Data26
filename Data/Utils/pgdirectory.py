@@ -112,6 +112,7 @@ def TemporaryDirectory(suffix='', prefix=None, dir=None):
             if e.errno != errno.ENOENT:
                 raise e
 
+
 def files_in_dir(path: str, logger=None) :
     try:
         _, _, filenames = next(walk(path))
