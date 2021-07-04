@@ -44,8 +44,7 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
         self._model = spacy.load("en_core_web_trf")
         self._agent = None
         self._min_record_cnt_4_pred = 1
-        self._data = pd.DataFrame()
-        self._data1 = {}
+        self._data = {}
         self._pattern_match = {}
         self._parameter = {'storage_type': 'localdisk',  # default storage to save and load models
                            'storage_name': 'lr',  # name of storage
@@ -65,6 +64,9 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
         self._model_distribution_strategy = "centralStoragestrategy"
         self._data_inputs = {}
         # self.get_config(profile="default")
+
+        self.set_profile("default")
+        self.clean_profile()
 
     @property
     def name(self):
@@ -120,31 +122,8 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
             return None
 
     def model_train(self, pgdataset: Union[list, np.ndarray] = None, data_scaler=None, parameter: dict = None):
-        ### Training an agent
         try:
-
-            self._model = None
-            self._model = Sequential()
-            self._model.add(Flatten(input_shape=(1, self._states)))
-            self._model.add(Dense(24, activation='relu'))
-            self._model.add(Dense(24, activation='relu'))
-            self._model.add(Dense(self._actions, activation='linear'))
-
-            self._model.summary()
-
-
-
-            policy = BoltzmannQPolicy()
-            memory = SequentialMemory(limit=50000, window_length=1)
-            self._agent = DQNAgent(model=self._model, memory=memory, policy=policy,
-                           nb_actions=self._actions, nb_steps_warmup=100, target_model_update=1e-2)
-            #return dqn
-            #return model
-            self._agent.compile(Adam(lr=1e-3), metrics=['mae'])
-            self._agent.fit(self._env, nb_steps=50000, visualize=False, verbose=1)
-            print("okokok")
-
-            self.model_save(self._agent, "CartPole")
+            pass
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -172,7 +151,7 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return ""
 
-    def get_tasks_v2(self, pg_data: Union[str, list], pg_parameters: dict = None) -> bool:
+    def get_tasks(self, pg_data: Union[str, list], pg_parameters: dict = None) -> bool:
 
         """Prepares inputs into a standard format
         [(name(string), parameters(dict), data(varies), (name1(string), parameters1(dict), data1(varies), ...]
@@ -199,13 +178,14 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
                     self._data_inputs = [(key, item) for key, item in pgyaml.yaml_load(yaml_filename=pg_data).items()]
                 elif _file_ext in (".csv"):
                     _df = pd.read_csv(pg_data, sep=pg_parameters["separator"])
-                    self._column_heading = _df.columns.values.tolist()
+                    self._column_heading = _df.columns.values.tolist()[0].split(',')
                     self._parameter = {**self._parameter, **pg_parameters}
                     #print(f"column heading: {type(self._column_heading)}")
 
                     #pd.read_csv(pg_data, sep="|").values.tolist())
                     #self._data_inputs = [x for x in zip(repeat(pg_parameters['name']), repeat(pg_parameters), _df.values.tolist())] if pg_parameters else _df.values.tolist()
-                    self._data_inputs = [x for x in zip(repeat(pg_parameters['name']), _df.values.tolist())] if pg_parameters else _df.values.tolist()
+                    #self._data_inputs = [x for x in zip(repeat(pg_parameters['name']), _df.values.tolist())] if pg_parameters else _df.values.tolist()
+                    self._data_inputs = [(x[0], x[1][0].split(',')) for x in zip(repeat(pg_parameters['name']), _df.values.tolist())] if "name" in pg_parameters else [x[0].split(',') for x in _df.values.tolist()]
             elif isinstance(pg_data, list) and pg_parameters:
                 self._data_inputs = list(zip(pg_data, pg_parameters))
             else:
@@ -216,60 +196,7 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return False
 
-    def get_tasks(self, dataset: Union[pd.DataFrame, dict, str], parameter: dict = None) -> bool:
-        try:
-            if isinstance(dataset, str):
-                ### header is required
-                self._data_inputs[parameter['name']] = {'parameter': parameter, 'data': pd.read_csv(dataset, header=0)}
-            elif isinstance(dataset, dict):
-                self._data_inputs[parameter['name']] = {'parameter': parameter,
-                                                        'data': pd.DataFrame.from_dict(dataset, orient='index')}
-            elif isinstance(dataset, pd.DataFrame):
-                self._data_inputs[parameter['name']] = {'parameter': parameter, 'data': dataset}
-
-            return True
-        except Exception as err:
-            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-        return False
-
-    def _reset(self, env_name):
-        del self._model
-        del self._agent
-        del self._env
-        self._env = gym.make(env_name)
-        self._states = self._env.observation_space.shape[0]
-        self._actions = self._env.action_space.n
-
-    def _process(self, pgdataset: pd.DataFrame, parameters: dict = {}, *args, **kwargs) -> Union[float, int, None]:
-        def _get_entity(data: str, *args, **kwarg):
-            doc = self._model(data)
-            org_list =[]
-            # loop through the identified entities and append ORG entities to org_list
-
-            for entity in doc.ents:
-                #if entity.label_ == entity_type:
-                if entity.label_ in args:
-                    org_list.append(entity.text)
-
-            # if organization is identified more than once it will appear multiple times in list
-            # we use set() to remove duplicates then convert back to list
-            org_list = list(set(org_list))
-            return org_list
-
-        try:
-            # process the text with our SpaCy model to get named entities
-            #for item in self._public_labels:
-            for item in self._test_labels:
-                #pgdataset[item] = pgdataset['selftext'].apply(_get_entity)
-                pgdataset[item] = pgdataset['selftext'].apply(_get_entity, args=(item,))
-                
-            self._data = pd.concat([self._data, pgdataset], ignore_index=True)
-
-        except Exception as err:
-            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-        return None
-
-    def process_v2(self, pg_data_name: str, pg_data=None, pg_parameters: dict = {}) -> Union[float, int, None]:
+    def _process(self, pg_data_name: str, pg_data=None, pg_parameters: dict = {}) -> Union[float, int, None]:
         def _get_entity(data: str, *args, **kwarg):
             doc = self._model(data)
             org_list = []
@@ -286,16 +213,18 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
             return org_list
 
         try:
-            print(f"here is the number of records: {pg_data}")
-            print(f"here is the number of records in df: {pd.DataFrame(pg_data).transpose()}")
-            exit(0)
+            _pg_dataset = pd.DataFrame([pg_data], columns=self._column_heading)
+
             # process the text with our SpaCy model to get named entities
             # for item in self._public_labels:
             for item in self._test_labels:
                 # pgdataset[item] = pgdataset['selftext'].apply(_get_entity)
-                pg_data[item] = pg_data['selftext'].apply(_get_entity, args=(item,))
+                _pg_dataset[item] = _pg_dataset['selftext'].apply(_get_entity, args=(item,))
 
-            self._data = pd.concat([self._data, pg_data], ignore_index=True)
+            self._data[pg_data_name] = pd.concat([self._data[pg_data_name], _pg_dataset], ignore_index=True) if pg_data_name in self._data else _pg_dataset
+
+            if len(self._data[pg_data_name]) % 10000 == 0 and len(self._data[pg_data_name]) != 0:
+                self.save(self._data[pg_data_name], pg_data_name)
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -315,6 +244,18 @@ class PGLearningNER(pglearningbase.PGLearningBase, pglearningcommon1.PGLearningC
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return False
+
+    def save(self, data: pd.DataFrame, file_prefix: str = None) -> bool:
+        if len(data) == 0: return True
+        try:
+            _data = data.replace({'|': ''}, regex=True)
+            print(f"save data to {self._parameter['save_dir']}/{file_prefix}_{pgfile.get_random_filename('.csv')}")
+            _filepath = f"{self._parameter['save_dir']}/{file_prefix}_{pgfile.get_random_filename('.csv')}"
+            data.to_csv(_filepath, sep="|", index=False)
+            return True
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+        return False
 
 
 class PGLearningNERExt(PGLearningNER):

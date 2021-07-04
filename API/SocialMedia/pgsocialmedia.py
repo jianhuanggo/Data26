@@ -72,9 +72,9 @@ def api_social_media(object_type: str, object_name: str, variable_name: str ="_p
             session_in_args = arg_session in func_params and func_params.index(arg_session) < len(args)
             session_in_kwargs = arg_session in kwargs
 
-            print(session_in_args)
-            print(session_in_kwargs)
-            print(kwargs)
+            #print(session_in_args)
+            #print(session_in_kwargs)
+            #print(kwargs)
 
             # if (session_in_kwargs or session_in_args) and variable_name in kwargs and object_type in kwargs[variable_name]
             #    if object_name is None or object_name in kwargs[variable_name][object_type]:
@@ -86,7 +86,7 @@ def api_social_media(object_type: str, object_name: str, variable_name: str ="_p
             else:
                 #if arg_session in inspect.getfullargspec(func).args:
                 with create_session(object_type, subscription_level) as session:
-                    print(session)
+                    #print(session)
                     if session:
                         if object_name:
                             #object_name_namespace = {object_name: session}
@@ -95,7 +95,7 @@ def api_social_media(object_type: str, object_name: str, variable_name: str ="_p
                             kwargs[variable_name] = SimpleNamespace(**{object_type: object_name_namespace})
                         else:
                             kwargs[variable_name] = {object_type: session}
-                    print(kwargs)
+                    #print(kwargs)
                 return func(*args, **kwargs)
 
         return wrapper

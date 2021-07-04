@@ -1,6 +1,3 @@
-import os
-import sys
-import json
 import inspect
 import requests
 import pandas as pd
@@ -12,7 +9,6 @@ from Meta import pgclassdefault, pggenericfunc
 from Data.Utils import pgoperation
 from Data.Storage import pgstorage
 from Data.Utils import pgfile, pgdirectory, pgyaml
-from pprint import pprint
 
 
 #import warnings
@@ -35,6 +31,7 @@ class PGSMReddit(pgsocialmediabase.PGSocialMediaBase, pgsocialmediacommon.PGSoci
         self._data_inputs = {}
         self._headers = {}
         self._min_record_cnt_4_pred = 1
+        self._column_heading = None
         self._data = {}
         self._pattern_match = {}
         self._parameter = {'storage_type': 'localdisk',  # default storage to save and load models
@@ -73,7 +70,7 @@ class PGSMReddit(pgsocialmediabase.PGSocialMediaBase, pgsocialmediacommon.PGSoci
     def data(self):
         return self._data
 
-    def get_tasks_v2(self, pg_data: Union[str, list], pg_parameters: dict = None) -> bool:
+    def get_tasks(self, pg_data: Union[str, list], pg_parameters: dict = None) -> bool:
 
         """Prepares inputs into a standard format
         [(name(string), parameters(dict), data(varies), (name1(string), parameters1(dict), data1(varies), ...]
@@ -97,10 +94,11 @@ class PGSMReddit(pgsocialmediabase.PGSocialMediaBase, pgsocialmediacommon.PGSoci
                 if _file_ext in ("yml", "yaml"):
                     self._data_inputs = [(key, item) for key, item in pgyaml.yaml_load(yaml_filename=pg_data).items()]
                 elif _file_ext in (".csv"):
-                    self._data_inputs = [x for x in zip(repeat(pg_parameters['name']), repeat(pg_parameters),
-                                                        pd.read_csv(pg_data, sep="|").values.tolist())] if pg_parameters else pd.read_csv(pg_data, sep="|").values.tolist()
-                    #self._data_inputs = [x for x in zip(pd.read_csv(pg_data, sep="|").values.tolist(), pg_parameters)] if pg_parameters else pd.read_csv(pg_data, sep="|").values.tolist()
-                    #print(self._data_inputs[0])
+                    _df = pd.read_csv(pg_data, sep=pg_parameters["separator"])
+                    self._column_heading = _df.columns.values.tolist()
+                    self._parameter = {**self._parameter, **pg_parameters}
+                    self._data_inputs = [x for x in zip(repeat(pg_parameters['name']),
+                                                        _df.values.tolist())] if pg_parameters else _df.values.tolist()
             elif isinstance(pg_data, list) and pg_parameters:
                 self._data_inputs = list(zip(pg_data, pg_parameters))
             else:
@@ -111,38 +109,26 @@ class PGSMReddit(pgsocialmediabase.PGSocialMediaBase, pgsocialmediacommon.PGSoci
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return False
 
-    def get_tasks(self, dataset: Union[dict, str], parameter: dict = None) -> bool:
-        try:
-            if isinstance(dataset, str):
-                _input_yaml = pgyaml.yaml_load(yaml_filename=dataset)
-                for key, item in pgyaml.yaml_load(yaml_filename=dataset).items():
-                    self._data_inputs[key] = item
-            elif isinstance(dataset, dict):
-                self._data_inputs[pgfile.get_random_string()] = dataset
-            return True
-        except Exception as err:
-            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-        return False
-
-    def process_v2(self, pg_data_name: str, pg_parameters: dict = {}, pg_data=None):
+    def _process(self, pg_data_name: str, pg_data, pg_parameters: dict = {}):
 
         """Expects a format below and returns
         [(name(string), parameters(dict), data(varies), (name1(string), parameters1(dict), data1(varies), ...]
 
         Two type of inputs:
-        1) The dataset is already included, no need to invoke 3rd party to grab more data
-        2) A set of parameters which we use to obtain additional data via API or web interface (for this, pg_data will be null)
+        1) The dataset is actual data, we can then just go ahead to process them
+        2) The dataset is actual data is a set of parameters which we use to obtain additional data via API or web interface
 
         Args:
             pg_data_name: name of the dataset
+            pg_data: dataset, either raw data usually in dataframe or a set of parameters
             pg_parameters: parameters
-            pg_data: dataset itself
+
 
         Returns:
 
         """
         try:
-            _url = f"{self._api_base_url}/r/{pg_parameters['subreddit']}/{pg_parameters['topic']}"
+            _url = f"{self._api_base_url}/r/{pg_data['subreddit']}/{pg_data['topic']}"
             df = pd.DataFrame()
 
             self._data[pg_data_name] = df
@@ -158,70 +144,16 @@ class PGSMReddit(pgsocialmediabase.PGSocialMediaBase, pgsocialmediacommon.PGSoci
 
                 if len(res.json()['data']['children']) == 0 or len(self._data[pg_data_name]) + len(df) >= 3000:
                     self._data[pg_data_name] = pd.concat([self._data[pg_data_name], df], ignore_index=True)
-                    self.save(df, f"{pg_parameters['subreddit']}_{pg_parameters['topic']}")
+                    self.save(df, f"{pg_data['subreddit']}_{pg_data['topic']}")
                     return self._data[pg_data_name]
                 elif len(df) % 1000 == 0 and len(df) != 0:
                     self._data[pg_data_name] = pd.concat([self._data[pg_data_name], df], ignore_index=True)
-                    self.save(df, f"{pg_parameters['subreddit']}_{pg_parameters['topic']}")
+                    self.save(df, f"{pg_data['subreddit']}_{pg_data['topic']}")
                     df = pd.DataFrame()
                 else:
                     # from tqdm import tqdm
                     if len(df) % 100 == 0:
                         print(f"processed {len(self._data[pg_data_name]) + len(df)} reddits")
-
-                # iterate through each thread recieved
-                for thread in res.json()['data']['children']:
-                    # add info to dataframe
-                    df = df.append({
-                        'id': thread['data']['name'],
-                        'created_utc': int(thread['data']['created_utc']),
-                        'subreddit': thread['data']['subreddit'],
-                        'title': thread['data']['title'],
-                        'selftext': thread['data']['selftext'],
-                        'upvote_ratio': thread['data']['upvote_ratio'],
-                        'ups': thread['data']['ups'],
-                        'downs': thread['data']['downs'],
-                        'score': thread['data']['score']
-                    }, ignore_index=True)
-                # get earliest ID
-                earliest = df['id'].iloc[len(df) - 1]
-                # add earliest ID to params
-                params['after'] = earliest
-
-        except Exception as err:
-            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-        return None
-
-
-    def _process(self, pgdataset, parameters: dict = {}, *args, **kwargs) -> Union[pd.DataFrame, None]:
-        try:
-            _url = f"{self._api_base_url}/r/{parameters['subreddit']}/{parameters['topic']}"
-            df = pd.DataFrame()
-            print(pgdataset)
-
-            self._data[pgdataset] = df
-
-            # initialize parameters dictionary
-            params = {'limit': 100}
-            # iterate through several times to make sure we get all the data available
-            print(_url)
-            earliest = 0
-            while True:
-                # make request
-                res = requests.get(_url, headers=self._headers, params=params)
-
-                if len(res.json()['data']['children']) == 0 or len(self._data[pgdataset]) + len(df) >= 3000:
-                    self._data[pgdataset] = pd.concat([self._data[pgdataset], df], ignore_index=True)
-                    self.save(df, f"{parameters['subreddit']}_{parameters['topic']}")
-                    return self._data[pgdataset]
-                elif len(df) % 1000 == 0 and len(df) != 0:
-                    self._data[pgdataset] = pd.concat([self._data[pgdataset], df], ignore_index=True)
-                    self.save(df, f"{parameters['subreddit']}_{parameters['topic']}")
-                    df = pd.DataFrame()
-                else:
-                    # from tqdm import tqdm
-                    if len(df) % 100 == 0:
-                        print(f"processed {len(self._data[pgdataset]) + len(df)} reddits")
 
                 # iterate through each thread recieved
                 for thread in res.json()['data']['children']:

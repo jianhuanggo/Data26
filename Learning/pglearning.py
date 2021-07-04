@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Callable, Any, TypeVar
 from Meta import pggenericfunc, pgclassdefault
 from Learning.NamedEntityRelation import pgner
+from Learning.PyCaret import pgpycaret
 
 from Data.Config import pgconfig
 
@@ -36,11 +37,16 @@ def create_session(object_type, subscription_level: int = 1, logger=None):
                                      '999': pggenericfunc.notimplemented,
 
                                     },
+              'caret':      {'1': pgpycaret.PGLearningCaret,
+                             '2': pgpycaret.PGLearningCaretExt,
+                            '999': pgpycaret.PGLearningCaretSingleton,
+                            },
               }
 
     parameter = {'ner': pgner.PGLearningNER,
                  'dp': pggenericfunc.notimplemented,
-                 'lstm': pggenericfunc.notimplemented
+                 'lstm': pggenericfunc.notimplemented,
+                 'caret': pgpycaret.PGLearningCaret
                  }
 
     #Not_found = f"{api_name} not found, currently {' '.join(action.keys())} are supported"
@@ -73,9 +79,9 @@ def pg_learning(object_type: str, object_name: str, variable_name: str ="_pg_act
             session_in_args = arg_session in func_params and func_params.index(arg_session) < len(args)
             session_in_kwargs = arg_session in kwargs
 
-            print(session_in_args)
-            print(session_in_kwargs)
-            print(kwargs)
+            #print(session_in_args)
+            #print(session_in_kwargs)
+            #print(kwargs)
 
             # if (session_in_kwargs or session_in_args) and variable_name in kwargs and object_type in kwargs[variable_name]
             #    if object_name is None or object_name in kwargs[variable_name][object_type]:
@@ -87,7 +93,7 @@ def pg_learning(object_type: str, object_name: str, variable_name: str ="_pg_act
             else:
                 #if arg_session in inspect.getfullargspec(func).args:
                 with create_session(object_type, subscription_level) as session:
-                    print(session)
+                    #print(session)
                     if session:
                         if object_name:
                             #object_name_namespace = {object_name: session}
@@ -96,7 +102,7 @@ def pg_learning(object_type: str, object_name: str, variable_name: str ="_pg_act
                             kwargs[variable_name] = SimpleNamespace(**{object_type: object_name_namespace})
                         else:
                             kwargs[variable_name] = {object_type: session}
-                    print(kwargs)
+                    #print(kwargs)
                 return func(*args, **kwargs)
 
         return wrapper

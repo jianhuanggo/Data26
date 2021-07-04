@@ -32,8 +32,8 @@ def pg_worker_v2(client_num: int, parameters=None, tasks=None,
 
         _logger.info(_var)
         # print(f"action: {_pg_action}")
-        print(f"db: {_pg_db}")
-        print(f"parameters: {parameters}")
+        #print(f"db: {_pg_db}")
+        #print(f"parameters: {parameters}")
 
         if _pg_action is None:
             pggenericfunc.pg_error_logger(_logger, inspect.currentframe().f_code.co_name, "Nothing to do")
@@ -53,17 +53,16 @@ def pg_worker_v2(client_num: int, parameters=None, tasks=None,
         _action_tasks = None
 
         if _pg_action:
-            if _pg_action[parameters['_pg_action']].get_tasks_v2(parameters['input_file'], parameters):
+            if _pg_action[parameters['_pg_action']].get_tasks(parameters['input_file'], parameters):
                 _action_tasks = _pg_action[parameters['_pg_action']]._data_inputs
             else:
                 pggenericfunc.pg_error_logger(_logger, inspect.currentframe().f_code.co_name, "unable to get tasks")
             print(f"here is the data input: {_action_tasks[0]}")
 
-            exit(0)
             if _action_tasks:
                 for _data_index, _data_element in enumerate(_action_tasks):
                     if (_data_index % parameters['num_client']) == client_num:
-                        _pg_action[parameters['_pg_action']].process_v2(*_data_element)
+                        _pg_action[parameters['_pg_action']]._process(*_data_element)
                         processed_list.append(f"{client_num}: {_data_element}")
 
                 pprint(_pg_action[parameters['_pg_action']].data)
