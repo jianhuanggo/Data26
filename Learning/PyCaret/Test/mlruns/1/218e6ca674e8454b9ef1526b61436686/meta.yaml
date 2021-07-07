@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test/mlruns/1/218e6ca674e8454b9ef1526b61436686/artifacts
+end_time: 1625619055677
+entry_point_name: ''
+experiment_id: '1'
+lifecycle_stage: active
+name: ''
+run_id: 218e6ca674e8454b9ef1526b61436686
+run_uuid: 218e6ca674e8454b9ef1526b61436686
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1625619055580
+status: 3
+tags: []
+user_id: jianhuang

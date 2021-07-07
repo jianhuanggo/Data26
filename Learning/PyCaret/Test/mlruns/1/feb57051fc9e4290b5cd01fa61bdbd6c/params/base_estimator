@@ -1,0 +1,3 @@
+RidgeClassifier(alpha=2.54, class_weight=None, copy_X=True, fit_intercept=True,
+                max_iter=None, normalize=True, random_state=388, solver='auto',
+                tol=0.001)
