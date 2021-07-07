@@ -1,2 +1,0 @@
-LinearDiscriminantAnalysis(n_components=None, priors=None, shrinkage='auto',
-                           solver='eigen', store_covariance=False, tol=0.0001)

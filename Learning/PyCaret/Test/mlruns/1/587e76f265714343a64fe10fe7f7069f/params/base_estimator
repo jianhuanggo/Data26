@@ -1,1 +1,0 @@
-GaussianNB(priors=None, var_smoothing=2e-07)
