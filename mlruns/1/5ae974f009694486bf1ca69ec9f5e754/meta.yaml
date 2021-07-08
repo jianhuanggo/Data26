@@ -1,0 +1,15 @@
+artifact_uri: file:///Users/jianhuang/opt/anaconda3/envs/Data26/Data26/mlruns/1/5ae974f009694486bf1ca69ec9f5e754/artifacts
+end_time: 1625704066944
+entry_point_name: ''
+experiment_id: '1'
+lifecycle_stage: active
+name: ''
+run_id: 5ae974f009694486bf1ca69ec9f5e754
+run_uuid: 5ae974f009694486bf1ca69ec9f5e754
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1625704066848
+status: 3
+tags: []
+user_id: jianhuang

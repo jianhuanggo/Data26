@@ -52,7 +52,8 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         self._column_heading = None
         ### Specific Variables
-        self._best_model = None
+        self._best_model = {}
+        self._model_result = {}
         self._model_metrics = None
         self._model_training_client_id = 1
         self._model_save_threshold = 0.75
@@ -96,19 +97,20 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return False
 
-    def model_save(self, entity_name: str, parameters: dict = {}) -> bool:
+    def model_save(self, pg_model, pg_entity_name: str, pg_parameters: dict = {}) -> bool:
         """Returns True if weights are persisted
 
         Args:
-            entity_name: An unique Identifier used to form the model name
-            parameters: parameters
+            pg_model: the model needs to be saved
+            pg_entity_name: An unique Identifier used to form the model name
+            pg_parameters: parameters
 
         Returns:
             The return value. True for success, False otherwise.
 
         """
         try:
-            return save_model(self._best_model, model_name=entity_name)
+            return save_model(pg_model, model_name=pg_entity_name)
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -135,6 +137,171 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return None
 
+    def _model_train_automl(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
+                           pg_parameters: dict = None):
+        try:
+            if self._model_metrics == "F1":
+                from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
+                    setup
+                experiment = setup(pg_dataset,
+                                   silent=True,
+                                   target=pg_dataset.columns.tolist()[-1],
+                                   categorical_features=self.preprocessing(pg_dataset.iloc[:, :-1]),
+                                   # fix_imbalance=True,
+                                   # normalize=True,
+                                   # feature_selection=True,
+                                   remove_multicollinearity=True,
+                                   multicollinearity_threshold=0.8,
+                                   # remove_outliers=True,
+                                   log_experiment=True,
+                                   experiment_name=self._parameter['log_dir'])
+            else:
+                from pycaret.regression import automl, compare_models, tune_model, ensemble_model, blend_models, setup
+                experiment = setup(pg_dataset,
+                                   silent=True,
+                                   target=pg_dataset.columns.tolist()[-1],
+                                   categorical_features=self.preprocessing(pg_dataset.iloc[:, :-1]),
+                                   normalize=True,
+                                   # feature_selection=True,
+                                   remove_multicollinearity=True,
+                                   multicollinearity_threshold=0.8,
+                                   # remove_outliers=True,
+                                   transform_target=True,
+                                   log_experiment=True,
+                                   experiment_name=self._parameter['log_dir'])
+
+            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+
+            _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
+            # tune top 5 base models
+            _pg_tuned_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
+            # ensemble top 5 tuned models
+            _pg_bagged_best_models = [ensemble_model(i) for i in _pg_tuned_best_models]
+            # blend top 5 base models
+            _pg_blender = blend_models(estimator_list=_pg_best_models)
+            # select best model
+            self._best_model["automl"] = automl(optimize=self._model_metrics)
+
+            self._model_result["automl"] = self.model_test("automl")
+
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            raise
+
+    def _model_train_ensemble(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
+                           pg_parameters: dict = None):
+        try:
+            if self._model_metrics == "F1":
+                from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
+                    setup
+                experiment = setup(pg_dataset,
+                                   silent=True,
+                                   target=pg_dataset.columns.tolist()[-1],
+                                   categorical_features=self.preprocessing(pg_dataset.iloc[:, :-1]),
+                                   # fix_imbalance=True,
+                                   # normalize=True,
+                                   # feature_selection=True,
+                                   remove_multicollinearity=True,
+                                   multicollinearity_threshold=0.8,
+                                   # remove_outliers=True,
+                                   log_experiment=True,
+                                   experiment_name=self._parameter['log_dir'])
+            else:
+                from pycaret.regression import automl, compare_models, tune_model, ensemble_model, blend_models, setup
+                experiment = setup(pg_dataset,
+                                   silent=True,
+                                   target=pg_dataset.columns.tolist()[-1],
+                                   categorical_features=self.preprocessing(pg_dataset.iloc[:, :-1]),
+                                   normalize=True,
+                                   # feature_selection=True,
+                                   remove_multicollinearity=True,
+                                   multicollinearity_threshold=0.8,
+                                   # remove_outliers=True,
+                                   transform_target=True,
+                                   log_experiment=True,
+                                   experiment_name=self._parameter['log_dir'])
+
+            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+
+            _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
+            _best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
+
+            _best_models = _best_models[0]
+            self._best_model["ensemble"] = ensemble_model(_best_models, method='Bagging', optimize=self._model_metrics)
+
+            self._model_result["ensemble"] = self.model_test("ensemble")
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            raise
+
+    def _model_train_ransomforest(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
+                             pg_parameters: dict = None):
+        try:
+            if self._model_metrics == "F1":
+                from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
+                    setup
+                experiment = setup(pg_dataset,
+                                   silent=True,
+                                   target=pg_dataset.columns.tolist()[-1],
+                                   categorical_features=self.preprocessing(pg_dataset.iloc[:, :-1]),
+                                   # fix_imbalance=True,
+                                   # normalize=True,
+                                   # feature_selection=True,
+                                   remove_multicollinearity=True,
+                                   multicollinearity_threshold=0.8,
+                                   # remove_outliers=True,
+                                   log_experiment=True,
+                                   experiment_name=self._parameter['log_dir'])
+            else:
+                from pycaret.regression import automl, compare_models, tune_model, ensemble_model, blend_models, setup
+                experiment = setup(pg_dataset,
+                                   silent=True,
+                                   target=pg_dataset.columns.tolist()[-1],
+                                   categorical_features=self.preprocessing(pg_dataset.iloc[:, :-1]),
+                                   normalize=True,
+                                   # feature_selection=True,
+                                   remove_multicollinearity=True,
+                                   multicollinearity_threshold=0.8,
+                                   # remove_outliers=True,
+                                   transform_target=True,
+                                   log_experiment=True,
+                                   experiment_name=self._parameter['log_dir'])
+
+            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+
+            _pg_rf = create_model('rf')
+            self._best_model["rf"] = tune_model(_pg_rf, optimize=self._model_metrics)
+
+            self._model_result["rf"] = self.model_test("rf")
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            raise
+
+    def model_train(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None, pg_parameters: dict = None):
+        try:
+            self.model_metrics_sel(pg_dataset.iloc[:, -1], pg_parameters=pg_parameters)
+            self._model_train_automl(pg_dataset, pg_parameters=self._parameter)
+            self._model_train_ensemble(pg_dataset, pg_parameters=self._parameter)
+            self._model_train_ransomforest(pg_dataset, pg_parameters=self._parameter)
+
+            _comp_dict = {"rf": self._model_result["rf"][self._model_metrics], "automl": self._model_result["automl"][self._model_metrics], "ensemble": self._model_result["ensemble"][self._model_metrics]}
+            _sorted_comp_dict = {k: v for k, v in sorted(_comp_dict.items(), key=lambda item: item[1])}
+
+            print(f"picked model: {list(_sorted_comp_dict.keys())[0]}")
+            if self._model_result[list(_sorted_comp_dict.keys())[0]] > self._model_save_threshold:
+                self.model_save(self._best_model[list(_sorted_comp_dict.keys())[0]], pg_parameters['entity_name'])
+
+            #if self.model_test()['f1'] > self._model_save_threshold
+                #self.model_save(pg_parameters['entity_name'])
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            raise
+
+    """
     def model_train(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None, pg_parameters: dict = None):
         try:
             self.model_metrics_sel(pg_dataset.iloc[:, -1], pg_parameters=pg_parameters)
@@ -170,31 +337,29 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                    log_experiment=True,
                                    experiment_name=self._parameter['log_dir'])
 
-            """
-            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
 
-            _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
+            #_pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+
+            #_pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
             # tune top 5 base models
-            _pg_tuned_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
+            #_pg_tuned_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
             # ensemble top 5 tuned models
-            _pg_bagged_best_models = [ensemble_model(i) for i in _pg_tuned_best_models]
+            #_pg_bagged_best_models = [ensemble_model(i) for i in _pg_tuned_best_models]
             # blend top 5 base models
-            _pg_blender = blend_models(estimator_list=_pg_best_models)
+            #_pg_blender = blend_models(estimator_list=_pg_best_models)
             # select best model
-            self._best_model = automl(optimize=self._model_metrics)
+            #self._best_model = automl(optimize=self._model_metrics)
 
-            print(f"bagged_top5: {_pg_bagged_best_models}")
-            print(f"blender: {_pg_blender}")
-            print(f"best: {self._best_model}")
-            best_model_results = pull()
-            print(best_model_results)
-            self.model_test()
+            #print(f"bagged_top5: {_pg_bagged_best_models}")
+            #print(f"blender: {_pg_blender}")
+            #print(f"best: {self._best_model}")
+            #best_model_results = pull()
+            #print(best_model_results)
+            #self.model_test()
 
             #if self.model_test()['f1'] > self._model_save_threshold
                 #self.model_save(pg_parameters['entity_name'])
 
-
-            """
             _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
             _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
             _best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
@@ -218,16 +383,16 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             raise
+    """
 
-    def model_test(self, pgdataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None, parameter: dict = None) -> Union[dict, None]:
+    def model_test(self, pg_model_name: str, parameter: dict = None) -> Union[dict, None]:
 
-        ### Testing agent
         try:
             print("start apply model to test dataset...")
             if self._model_metrics == 'F1':
-                _pg_calibrated_dt = calibrate_model(self._best_model)
+                _pg_calibrated_dt = calibrate_model(self._best_model[pg_model_name])
                 #print(_pg_calibrated_dt)
-            _pg_pred_holdout = predict_model(self._best_model)
+            _pg_pred_holdout = predict_model(self._best_model[pg_model_name])
             #print(_pg_pred_holdout)
             return self.pg_model_score(_pg_pred_holdout['target'].values.tolist(), _pg_pred_holdout['Label'].values.tolist())
 
@@ -237,7 +402,6 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             #print(f1_score(_pg_pred_holdout.iloc[:, -2].values.tolist(), _pg_pred_holdout.iloc[:, -1].values.tolist()))
             #print(predict_model(self._best_model, pgdataset))
             #self._best_model.predict
-
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
