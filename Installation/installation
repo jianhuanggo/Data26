@@ -1,0 +1,10 @@
+- pip install pycaret
+- pip install pyaes
+- pip install boto3
+- pip install pyAesCrypt
+- pip install jsonpickle
+- pip install gym
+- pip install --upgrade tensorflow
+- pip install stable-baselines3
+- pip install python-daemon
+- pip install keras-rl2

@@ -15,6 +15,7 @@
 
 def test_imports():
     # flake8: noqa
+    import gym
     from sparseml import (
         Framework,
         FrameworkInferenceProviderInfo,

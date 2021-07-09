@@ -14,7 +14,6 @@ from stable_baselines3 import PPO, A2C, DDPG, DQN, SAC, TD3
 from Data.Utils import pgfile, pgdirectory, pgyaml
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
 from sklearn.model_selection import train_test_split, cross_val_score
-import keyboard
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
