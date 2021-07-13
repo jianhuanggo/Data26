@@ -4,10 +4,10 @@ from sqlalchemy import exc
 import mysql.connector
 from mysql.connector import errorcode
 import Data.Utils.pgyaml as pgyaml
-import yfinance as yf
 from collections import OrderedDict
 import math
 import sqlalchemy
+from collections import namedtuple
 from sqlalchemy.dialects.mysql import pymysql
 from sqlalchemy.orm import sessionmaker, scoped_session
 from Data.Security import encryption
@@ -401,14 +401,15 @@ def setup_mysql(self):
 
     return Rds(host=host,
                username=username,
-               post_userpass=userpass,
-               post_port=rds_post_port,
-                   post_db=rds_post_db)
+               userpass=userpass,
+               port=port,
+               post_db=db)
+
 
 if __name__ == '__main__':
 
-    stock = yf.Ticker("ADVWW")
-    stock.info
+    #stock = yf.Ticker("ADVWW")
+    #stock.info
 
     exit(0)
     mysql = PGMysql("/Users/jianhuang/opt/anaconda3/envs/stock_data/mysql.yml")
@@ -442,10 +443,10 @@ if __name__ == '__main__':
 
     """
 
-    stock = yf.Ticker("ADVWW")
+    #stock = yf.Ticker("ADVWW")
     #stock = yf.Ticker("AMZN")
     #print(len(stock.info.keys()))
 
-    mysql.populate_data(table_name="stock_detail", mode="simple", data_in=stock.info)
+    #mysql.populate_data(table_name="stock_detail", mode="simple", data_in=stock.info)
     #stock = yf.Ticker("AMZN")
     #mysql.populate_data(table_name="stock_detail", mode="simple", data_in=stock.info)

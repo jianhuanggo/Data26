@@ -8,3 +8,5 @@
 - pip install stable-baselines3
 - pip install python-daemon
 - pip install keras-rl2
+- pip install mysql-connector-python
+- pip install psycopg2-binary

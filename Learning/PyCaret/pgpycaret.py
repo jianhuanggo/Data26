@@ -10,9 +10,8 @@ from Data.Storage import pgstorage
 from itertools import repeat
 from pycaret.classification import *
 from subprocess import Popen
-from stable_baselines3 import PPO, A2C, DDPG, DQN, SAC, TD3
 from Data.Utils import pgfile, pgdirectory, pgyaml
-from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score
+from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, mean_squared_error, mean_absolute_error, mean_squared_log_error, r2_score
 from sklearn.model_selection import train_test_split, cross_val_score
 
 import warnings
@@ -51,7 +50,8 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         self._column_heading = None
         ### Specific Variables
-        self._best_model = {}
+        self._models = {}
+        self._best_model = None
         self._model_result = {}
         self._model_metrics = None
         self._model_training_client_id = 1
@@ -86,8 +86,8 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         """
         try:
-            self._model_metrics = pg_parameters["overwrite"] if "overwrite" in pg_parameters else {'True': "F1",
-                                                                                                   'False': "MSE"}.get(
+            self._model_metrics = pg_parameters["overwrite"] if "overwrite" in pg_parameters else {'True': "f1",
+                                                                                                   'False': "neg_mean_squared_error"}.get(
                 str(len(pg_target_dataset.unique()) < 7))
             print(f"metrics is: {self._model_metrics}")
             return True
@@ -139,7 +139,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
     def _model_train_automl(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
                            pg_parameters: dict = None):
         try:
-            if self._model_metrics == "F1":
+            if self._model_metrics == "f1":
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
                     setup
                 experiment = setup(pg_dataset,
@@ -179,10 +179,9 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             # blend top 5 base models
             _pg_blender = blend_models(estimator_list=_pg_best_models)
             # select best model
-            self._best_model["automl"] = automl(optimize=self._model_metrics)
+            self._models["automl"] = automl(optimize=self._model_metrics)
 
             self._model_result["automl"] = self.model_test("automl")
-
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -191,7 +190,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
     def _model_train_ensemble(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
                            pg_parameters: dict = None):
         try:
-            if self._model_metrics == "F1":
+            if self._model_metrics == "f1":
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
                     setup
                 experiment = setup(pg_dataset,
@@ -227,7 +226,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             _best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
 
             _best_models = _best_models[0]
-            self._best_model["ensemble"] = ensemble_model(_best_models, method='Bagging', optimize=self._model_metrics)
+            self._models["ensemble"] = ensemble_model(_best_models, method='Bagging', optimize=self._model_metrics)
 
             self._model_result["ensemble"] = self.model_test("ensemble")
 
@@ -238,7 +237,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
     def _model_train_ransomforest(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
                              pg_parameters: dict = None):
         try:
-            if self._model_metrics == "F1":
+            if self._model_metrics == "f1":
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
                     setup
                 experiment = setup(pg_dataset,
@@ -271,9 +270,10 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
 
             _pg_rf = create_model('rf')
-            self._best_model["rf"] = tune_model(_pg_rf, optimize=self._model_metrics)
+            self._models["rf"] = tune_model(_pg_rf, optimize=self._model_metrics)
 
             self._model_result["rf"] = self.model_test("rf")
+            print(self._model_result)
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -286,12 +286,16 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             self._model_train_ensemble(pg_dataset, pg_parameters=self._parameter)
             self._model_train_ransomforest(pg_dataset, pg_parameters=self._parameter)
 
-            _comp_dict = {"rf": self._model_result["rf"][self._model_metrics], "automl": self._model_result["automl"][self._model_metrics], "ensemble": self._model_result["ensemble"][self._model_metrics]}
-            _sorted_comp_dict = {k: v for k, v in sorted(_comp_dict.items(), key=lambda item: item[1])}
+            #print(self._model_result["rf"][self._model_metrics])
 
-            print(f"picked model: {list(_sorted_comp_dict.keys())[0]}")
-            if self._model_result[list(_sorted_comp_dict.keys())[0]] > self._model_save_threshold:
-                self.model_save(self._best_model[list(_sorted_comp_dict.keys())[0]], pg_parameters['entity_name'])
+            _comp_dict = {"rf": self._model_result["rf"][self._model_metrics], "automl": self._model_result["automl"][self._model_metrics], "ensemble": self._model_result["ensemble"][self._model_metrics]}
+            print(_comp_dict)
+            _sorted_comp_dict = {k: v for k, v in sorted(_comp_dict.items(), key=lambda item: item[1], reverse=True)}
+            self._best_model = list(_sorted_comp_dict.keys())[0]
+            print(f"picked model: {self._best_model}")
+
+            if int(self._model_result[self._best_model][self._model_metrics]) > int(self._model_save_threshold):
+                self.model_save(self._best_model, pg_parameters['entity_name'])
 
             #if self.model_test()['f1'] > self._model_save_threshold
                 #self.model_save(pg_parameters['entity_name'])
@@ -307,7 +311,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             #print(self.preprocessing(pgdataset.iloc[:, :-1]))
             #print(pgdataset.columns.tolist()[-1])
 
-            if self._model_metrics == "F1":
+            if self._model_metrics == "f1":
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, setup
                 experiment = setup(pg_dataset,
                                    silent=True,
@@ -388,10 +392,12 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         try:
             print("start apply model to test dataset...")
-            if self._model_metrics == 'F1':
-                _pg_calibrated_dt = calibrate_model(self._best_model[pg_model_name])
+
+            if self._model_metrics == 'f1':
+                _pg_calibrated_dt = calibrate_model(self._models[pg_model_name])
                 #print(_pg_calibrated_dt)
-            _pg_pred_holdout = predict_model(self._best_model[pg_model_name])
+
+            _pg_pred_holdout = predict_model(self._models[pg_model_name])
             #print(_pg_pred_holdout)
             return self.pg_model_score(_pg_pred_holdout['target'].values.tolist(), _pg_pred_holdout['Label'].values.tolist())
 
@@ -406,26 +412,39 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return None
 
-    def pg_model_score(self, actual: Union[tuple, list, set], predicted: Union[tuple, list, set]) -> Union[None, dict]:
+    def pg_model_score(self, pg_actual: Union[tuple, list, set], pg_predicted: Union[tuple, list, set], pg_parameters: dict = {}) -> Union[None, dict]:
 
-        _actual = [int(x) for x in actual]
-        _predicted = [int(x) for x in predicted]
+        """Returns appreciate metrics depends on whether classification or regression
 
-        if len(_actual) != len(actual):
+        See details @ https://scikit-learn.org/stable/modules/model_evaluation.html
+
+        Args:
+            pg_actual: the model needs to be saved
+            pg_predicted: An unique Identifier used to form the model name
+            pg_parameters: parameters
+
+        Returns:
+            The return value. True for success, False otherwise.
+
+        """
+
+        _pg_actual = [int(x) for x in pg_actual]
+        _pg_predicted = [int(x) for x in pg_predicted]
+
+        if len(_pg_actual) != len(pg_actual):
             return pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, "the size of predicted does not match with size of actual")
 
         try:
-            return {'accuracy': accuracy_score(_actual, _predicted),
-                    'recall': recall_score(_actual, _predicted),
-                    'precision': precision_score(_actual, _predicted),
-                    'f1': f1_score(_actual, _predicted)
-                    }
+            return {'accuracy': accuracy_score(_pg_actual, _pg_predicted),
+                    'recall': recall_score(_pg_actual, _pg_predicted),
+                    'precision': precision_score(_pg_actual, _pg_predicted),
+                    'f1': f1_score(_pg_actual, _pg_predicted)
+                    } if self._model_metrics == 'f1' else {'neg_mean_squared_error': mean_squared_error(_pg_actual, _pg_predicted),
+                                                           'neg_mean_squared_log_error': mean_squared_log_error(_pg_actual, _pg_predicted),
+                                                           'neg_mean_absolute_error': mean_absolute_error(_pg_actual, _pg_predicted),
+                                                           'r2': r2_score(_pg_actual, _pg_predicted)}
         except Exception as err:
             return pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-
-        else:
-            return pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name,
-                                                 "this calculation needs multiple numbers as input")
 
     def get_model_filename(self, parameters: dict) -> str:
         try:
@@ -572,14 +591,7 @@ class PGLearningCaretExt(PGLearningCaret):
         super(PGLearningCaretExt, self).__init__(project_name=project_name, logging_enable=logging_enable)
 
         ### Specific Variables
-        self._model_subtype = {'A2C': A2C,
-                               'PPO': PPO,
-                               'DDPG': DDPG,
-                               'DQN': DQN,
-                               'TD3': TD3,
-                               'SAC': SAC,
-                               'custom': PPO
-                                }
+        self._model_subtype = {}
         os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
