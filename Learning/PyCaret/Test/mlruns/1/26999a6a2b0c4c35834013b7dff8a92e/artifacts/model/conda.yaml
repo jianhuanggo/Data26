@@ -1,7 +1,0 @@
-channels:
-- conda-forge
-dependencies:
-- pip
-- pip:
-  - pycaret==2.3.1
-name: /Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test/-env
