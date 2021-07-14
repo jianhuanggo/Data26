@@ -295,7 +295,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             print(f"picked model: {self._best_model}")
 
             if int(self._model_result[self._best_model][self._model_metrics]) > int(self._model_save_threshold):
-                self.model_save(self._best_model, pg_parameters['entity_name'])
+                self.model_save(self._models[self._best_model], pg_parameters['entity_name'])
 
             #if self.model_test()['f1'] > self._model_save_threshold
                 #self.model_save(pg_parameters['entity_name'])
