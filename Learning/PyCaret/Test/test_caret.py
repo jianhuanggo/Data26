@@ -52,8 +52,7 @@ def pg_worker_v2(client_num: int, parameters=None, tasks=None,
         _action_tasks = None
 
         if _pg_action:
-            if _pg_action[parameters['_pg_action']].get_tasks(parameters['input_file'], {**parameters, **{'client_id': client_num,
-                                                                                                          'num_client': parameters['num_client']}}):
+            if _pg_action[parameters['_pg_action']].get_tasks(parameters['input_file'], {**parameters, **{'client_id': client_num,                                                                                                          'num_client': parameters['num_client']}}):
                 _action_tasks = _pg_action[parameters['_pg_action']]._data_inputs
             else:
                 pggenericfunc.pg_error_logger(_logger, inspect.currentframe().f_code.co_name, "unable to get tasks")
@@ -127,7 +126,6 @@ async def get_data(_pg_action=None):
     ret = await news_run_tasks(func=_news_proc, num_client=total_client_number,
                                parameter={**_func_parameters, **_parameters})
     print(ret)
-
 
 def main():
     _loop = asyncio.get_event_loop()

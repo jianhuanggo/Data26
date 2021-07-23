@@ -8,6 +8,7 @@ import shutil
 from types import SimpleNamespace
 import boto3
 import requests
+import pandas as pd
 from botocore.exceptions import ClientError
 from Data.Storage import pgstoragebase
 from Data.StorageFormat import pgstorageformat
@@ -18,6 +19,7 @@ from Data.Utils import pgsecret
 from Data.Utils import pgoperation
 from Data.Storage import pgstoragecommon
 from Meta.pggenericfunc import check_args
+
 
 __version__ = "1.7"
 
@@ -64,6 +66,8 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
 
         self.create_client()
         self.set_bucket()
+        self._data_inputs = {}
+        self._data = {}
 
     def inst(self):
         return self
@@ -95,7 +99,6 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return None, None
 
-
     def create_client(self, aws_access_key_id: str = None, aws_secret_access_key: str = None, region_name=None) -> bool:
         _region_name = region_name or self._region_name or "us-east-1"
         _aws_access_key_id = aws_access_key_id or self._config.parameters["config_file"]['default']['aws_access_key_id']
@@ -110,35 +113,64 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return False
 
-    def parse_location(self, s3_object_key: str):
+    """
+    def parse_location(self, s3_object_key: str) -> dict:
         if not s3_object_key:
             return {}
 
         _s3_object_key = s3_object_key.replace("s3://", "") if s3_object_key.startswith("s3://") else s3_object_key
 
+        if "/" not in _s3_object_key or _s3_object_key[-1] == "/":
+            _response = self._s3_client.list_objects_v2(Bucket=_s3_object_key.replace("/", ""), Prefix="")
+            return {"s3_bucket_location": _s3_object_key.replace("/", ""),
+                    "object_key": [x["Key"] for x in _response["Contents"] if x]} if _response['ResponseMetadata']['HTTPStatusCode'] == 200 else {}
 
-        if "/" not in _s3_object_key:
-            return {"s3_bucket_location": _s3_object_key} if _s3_object_key in self.list_bucket() else {}
         else:
             try:
                 _dir_parts = _s3_object_key.split('/')
                 _bucket_name = _dir_parts[0]
                 _object_key = '/'.join(_dir_parts[1:])
 
-                #print(_bucket_name)
-                #print(_object_key)
+                print(_bucket_name)
+                print(_object_key)
+                print(self._s3_client)
 
                 _response = self._s3_client.head_object(Bucket=_bucket_name,
                                                         Key=_object_key)
 
                 if _response['ResponseMetadata']['HTTPStatusCode'] == 200:
-
                     return {"s3_bucket_location": _bucket_name, "object_key": _object_key}
                 else:
                     return {}
             except ClientError as err:
                 pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
                 return {}
+    """
+
+    def parse_location(self, s3_object_key: str) -> dict:
+
+        if not s3_object_key:
+            return {}
+
+        try:
+            _s3_object_key = s3_object_key.replace("s3://", "") if s3_object_key.startswith("s3://") else s3_object_key
+            _dir_parts = _s3_object_key.split('/')
+            _bucket_name = _dir_parts[0]
+            _object_key = '/'.join(_dir_parts[1:]) if len(_dir_parts) > 1 else ""
+
+            #print(_bucket_name)
+            #print(_object_key)
+            #print(self._s3_client)
+
+            _response = self._s3_client.list_objects_v2(Bucket=_bucket_name, Prefix=_object_key)
+
+            return {"s3_bucket_location": _s3_object_key.split('/')[0],
+                    "object_key": [x["Key"] for x in _response["Contents"] if x]} if _response['ResponseMetadata'][
+                                                                                         'HTTPStatusCode'] == 200 and "Contents" in _response else {}
+        except ClientError as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            return {}
+
 
     def create_bucket(self, s3_bucket_location: str) -> bool:
         """
@@ -322,6 +354,7 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
         try:
 
             _storage_parameter = self.parse_location(location)
+            #_storage_parameter["object_key"] = _storage_parameter["object_key"][0] if _storage_parameter["object_key"] else ""
             ### Object doesn't exist
             if not _storage_parameter:
                 return False
@@ -453,9 +486,28 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
                         }, False)
 
             pgdirectory.isdirectoryexist(_location['directory'], False)
-            _location['object_key'] = '/'.join(_location['object_key'].replace("s3://", "").split('/')[1:]) if \
-                _location['object_key'].startswith("s3://") else _location['object_key']
 
+            if "object_key" in _location and _location['object_key']:
+                if isinstance(_location['object_key'], str):
+                    _location['object_key'] = [_location['object_key']]
+
+                if isinstance(_location['object_key'], list):
+                    _location['object_key'] = [x.replace("s3://", "").split('/')[1:] if x.startswith("s3://") else x for x in _location['object_key']]
+                    #print(_location['object_key'])
+                    for _pg_each_file in _location['object_key']:
+                        self._s3_client.download_file(_location['s3_bucket_location'],
+                                                      _pg_each_file,
+                                                      pgdirectory.add_splash_2_dir(_location['directory']) + _pg_each_file.split('/')[-1])
+                #elif isinstance(_location['object_key'], str):
+                #    _location['object_key'] = _location['object_key'].replace("s3://", "").split('/')[1:]
+            else:
+                for _object_key in self.list_keys(location['s3_bucket_location']):
+                    self._s3_client.download_file(_location['s3_bucket_location'], _object_key,
+                                                  pgdirectory.add_splash_2_dir(_location['directory']) + _object_key)
+            return True
+            #_location['object_key'] = '/'.join(_location['object_key'].replace("s3://", "").split('/')[1:]) if \
+            #    _location['object_key'].startswith("s3://") else _location['object_key']
+            """
             if "object_key" in _location:
                 _filename = _location['object_key'].split('/')[-1]
                 self._s3_client.download_file(_location['s3_bucket_location'], _location['object_key'],
@@ -465,6 +517,7 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
                     self._s3_client.download_file(_location['s3_bucket_location'], _object_key,
                                                   pgdirectory.add_splash_2_dir(_location['directory']) + _object_key)
             return True
+            """
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return False
@@ -478,9 +531,6 @@ class PGS3(pgstoragebase.PGStorageBase, pgstoragecommon.PGStorageCommon):
                     file.write(lines)
         return True
         """
-
-
-
 
     def load_streaming_multiload(self):
         pggenericfunc.notimplemented()
@@ -583,8 +633,155 @@ class S3File(io.RawIOBase):
         return True
 
 
-if __name__ == '__main__':
+class PGS3Ext(PGS3):
+    def __init__(self, project_name: str = "pgs3ext", logging_enable: str = False):
+        super(PGS3Ext, self).__init__(project_name=project_name, logging_enable=logging_enable)
 
+        ### Specific Variables
+        self._model_subtype = {}
+        os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+    def get_tasks(self, pg_data: str, pg_parameters: dict = None) -> bool:
+
+        """Prepares inputs into a standard format
+        [(name(string), parameters(dict), data(varies), (name1(string), parameters1(dict), data1(varies), ...]
+
+        Three type of inputs:
+        1) if dataset is a string, then expects it to be a filename in yaml format
+        2) if dataset is a list with no parameter, then expects to be the final format above
+        3) if dataset is a list with parameter, then it will convert it to be the final format above
+
+        Args:
+            pg_data: full url of s3 bucket name and key  # eg. s3://tag-data-app-prod-0001/07_18_2021/
+            pg_parameters: parameters
+
+        Returns:
+
+        """
+        try:
+            self.create_client(aws_access_key_id=pg_parameters["aws_access_key_id"],
+                               aws_secret_access_key=pg_parameters["aws_secret_access_key"],
+                               region_name=pg_parameters["region_name"])
+
+            _task_list = {"0": self._s3_client.copy_object,
+                          "1": self._s3_client.delete_object,
+                          "2": self._s3_client.list_objects_v2
+                          }
+
+            #print(pg_parameters["aws_access_key_id"])
+            _pg_parse = self.parse_location(pg_data)
+            if not _pg_parse:
+                return True
+
+            _response = None
+
+            print(_pg_parse)
+            for item in _pg_parse["object_key"]:
+                if not item.startswith("PENDING_"):
+                    print(f"PENDING_{'/'.join(item.split('/')[:-1])}/{item.split('/')[-1]}")
+                    #_pg_target_key = f"PENDING_{'/'.join(item.split('/')[:-1])}/{item.split('/')[-1]}"
+
+                    for _pg_step, _pg_action in _task_list.items():
+                        if _pg_step == "0":
+                            _response = _pg_action(Bucket=_pg_parse['s3_bucket_location'],
+                                                   CopySource=f"{_pg_parse['s3_bucket_location']}/{item}",
+                                                   Key=f"PENDING_{'/'.join(item.split('/')[:-1])}/{item.split('/')[-1]}",
+                                                   ServerSideEncryption="AES256")
+
+                        elif _pg_step == "1":
+                            _response = _pg_action(Bucket=_pg_parse['s3_bucket_location'], Key=item)
+
+                        elif _pg_step == "2":
+                            _response = _pg_action(Bucket=_pg_parse['s3_bucket_location'], Prefix=f"PENDING_{item}")
+                            if self._data_inputs:
+                                self._data_inputs[pg_parameters['entity_name']]['data'] = self._data_inputs[pg_parameters['entity_name']]['data'] + [f"s3://{_pg_parse['s3_bucket_location']}/{x['Key']}" for x in _response['Contents']]
+                            else:
+                                self._data_inputs = {pg_parameters['entity_name']: {
+                                    'data': [f"s3://{_pg_parse['s3_bucket_location']}/{x['Key']}" for x in _response['Contents']],
+                                    'parameter': pg_parameters
+                                }
+                                }
+                        if _response and _response["ResponseMetadata"]["HTTPStatusCode"] >= 300:
+                            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name,
+                                                          f"Error, Step {_pg_step} encountered an error")
+                            return False
+
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+        return False
+
+    def _process(self, pg_data_name: str, pg_data=None, pg_parameters: dict = {}) -> Union[float, int, None]:
+        try:
+            #print(pg_data)
+            #exit(0)
+            if isinstance(pg_data, str):
+                pg_data = [pg_data]
+            if isinstance(pg_data, list):
+                for _pg_data_item in pg_data:
+                    self.load(_pg_data_item, storage_parameter=pg_parameters)
+
+
+            """
+            if isinstance(pg_data, pd.DataFrame):
+                self._data[pg_data_name] = None
+            elif isinstance(pg_data, str):
+                self.load(pg_data, storage_parameter=pg_parameters)
+                with pgstorageformat.pg_set_storage_format(pg_data) as pg_file_format:
+                    return pg_file_format
+            elif isinstance(pg_data, list):
+                self._data[pg_data_name] = []
+                for _pg_data_item in pg_data:
+                    self.load(_pg_data_item, storage_parameter=pg_parameters)
+                    print(f"{pg_parameters['directory']}/{_pg_data_item.split('/')[-1]}")
+                    with pgstorageformat.pg_set_storage_format(f"{pg_parameters['directory']}/{_pg_data_item.split('/')[-1]}") as pg_file_format:
+                        self._data[pg_data_name].append(pg_file_format)
+            return self._data[pg_data_name]
+            """
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+        return None
+
+    def process(self, name: str = None, *args: object, **kwargs: object) -> bool:
+        try:
+            if name and self._data_inputs:
+                _item = self._data_inputs[name]
+                self._data[name] = self._process(name, _item['data'], _item['parameter'], )
+            else:
+                for _index, _data in self._data_inputs.items():
+                    _item = self._data_inputs[_index]
+                    self._data[_index] = self._process(name, _item['data'], _item['parameter'])
+            return True
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            return False
+
+
+if __name__ == '__main__':
+    test = PGS3Ext()
+
+    test_parameter = {"directory": "/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test2",
+                      "aws_access_key_id": "AKIAXW42WHCP3KKG2BPJ",
+                      "aws_secret_access_key": "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",
+                      "region_name": "us-east-1",
+                      "mode": "file",
+                      "entity_name": "test"}
+    #test.create_client(aws_access_key_id=test_parameter["aws_access_key_id"],
+    #                   aws_secret_access_key=test_parameter["aws_secret_access_key"],
+    #                   region_name=test_parameter["region_name"])
+
+    #test.load('s3://tag-data-app-prod-0001/07_18_2021_PENDING/output.csv', storage_parameter=test_parameter)
+    #exit(0)
+
+    #/07_18_2021/output.csv
+    #test.get_tasks("s3://tag-data-app-prod-0001/07_18_2021/", test_parameter)
+    test.get_tasks("s3://tag-data-app-prod-0001/", test_parameter)
+    print(f"data input: {test._data_inputs}")
+    test.process("test", test_parameter)
+
+    print(f"data: {test._data}")
+    exit(0)
     mys3 = PGS3()
 
     mys3.create_client()

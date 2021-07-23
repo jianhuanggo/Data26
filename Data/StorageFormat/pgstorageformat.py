@@ -5,13 +5,18 @@ Exclusively for the purpose of managing daemon
 import contextlib
 import functools
 import inspect
+import json
 from types import SimpleNamespace
 from typing import Callable, Any, TypeVar
+
+import pandas as pd
+
 from Data.StorageFormat import pgcsv
 from Data.StorageFormat import pgjson
 from Data.StorageFormat.Blockchain import pgblockchaingeneral
 from Data.StorageFormat.Excel import pgexcel
 from Meta import pggenericfunc
+from Data.Utils import pgyaml
 
 __version__ = "1.7"
 
@@ -26,6 +31,20 @@ myfunction(parameter1, parameter2)
 
 """
 
+@contextlib.contextmanager
+def pg_set_storage_format(file, _logger=None):
+    _storage_format = {'csv': pd.read_csv,
+                       'json': json.loads,
+                       'yaml': pgyaml.yaml_load
+    }
+    print(file)
+    for key, item in _storage_format.items():
+        try:
+            yield {"file_format": key,
+                   "data": item(file)
+                   }
+        except Exception as err:
+            continue
 
 @contextlib.contextmanager
 def set_storage_format(object_type: str,

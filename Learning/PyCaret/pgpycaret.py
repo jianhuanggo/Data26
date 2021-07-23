@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import inspect
@@ -109,6 +110,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         """
         try:
+            with open (pg_parameters["dir"], "w") as f: json.dump(self._best_model, f)
             return save_model(pg_model, model_name=pg_entity_name)
 
         except Exception as err:
@@ -294,8 +296,9 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             self._best_model = list(_sorted_comp_dict.keys())[0]
             print(f"picked model: {self._best_model}")
 
-            if int(self._model_result[self._best_model][self._model_metrics]) > int(self._model_save_threshold):
-                self.model_save(self._models[self._best_model], pg_parameters['entity_name'])
+            print(int(self._model_result[self._best_model][self._model_metrics]) > int(self._model_save_threshold))
+
+            self.model_save(self._models[self._best_model], pg_parameters['entity_name'])
 
             #if self.model_test()['f1'] > self._model_save_threshold
                 #self.model_save(pg_parameters['entity_name'])
@@ -475,12 +478,23 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         """
         try:
+            """
             if self._best_model:
                 pass
             elif pgfile.isfileexist(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.pkl")):
                 self._best_model = self.model_load(self._parameter['entity_name'])
                 if self._best_model:
                     print(f"model {self._parameter['entity_name']} loaded")
+            """
+            if self._best_model in self._models and self._models[self._best_model]:
+                pass
+            elif pgfile.isfileexist(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.pkl")):
+                with open(f"{self._parameter['entity_name']}.conf") as f: self._best_model = json.load(f)["model_name"]
+                self._models[self._best_model] = self.model_load(self._parameter['entity_name'])
+                if self._best_model in self._models and self._models[self._best_model]:
+                    print(f"model {self._parameter['entity_name']} loaded")
+            print(self._best_model)
+            print(self._models)
 
             if isinstance(pg_data, str):
                 _file_ext = pg_data.split('.')[-1]
@@ -501,7 +515,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                     self._column_heading = _df.columns.values.tolist()
                     self._parameter = {**self._parameter, **pg_parameters}
 
-                    if self._best_model:
+                    if self._models[self._best_model]:
                         #self._data_inputs = [(x[0], x[1][0].split(',')) for x in zip(repeat(self._parameter['entity_name']), _df.values.tolist())] if "entity_name" in self._parameter else [x[0].split(',') for x in _df.values.tolist()]
                         self._data_inputs = [x for x in zip(repeat(self._parameter['entity_name']), _df.values.tolist())] if "entity_name" in self._parameter else _df.values.tolist()
                     else:
@@ -534,16 +548,18 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             #print(pg_data)
             #print(pg_data_name)
 
-            if self._best_model:
+            if self._best_model in self._models and self._models[self._best_model]:
                 pass
             elif pgfile.isfileexist(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.pkl")):
-                self._best_model = self.model_load(self._parameter['entity_name'])
-                print(f"model {self._parameter['entity_name']} loaded")
+                with open(f"{self._parameter['entity_name']}.conf") as f: self._best_model = json.load(f)["model_name"]
+                self._models = self.model_load(self._parameter['entity_name'])
+                if self._best_model in self._models and self._models[self._best_model]:
+                    print(f"model {self._parameter['entity_name']} loaded")
 
             if isinstance(pg_data, pd.DataFrame):
-                self._data[pg_data_name] = self._best_model.predict(pg_data.iloc[:, : -1])
+                self._data[pg_data_name] = self._models[self._best_model].predict(pg_data.iloc[:, : -1])
             elif isinstance(pg_data, list):
-                _pg_dataset = self._best_model.predict(pd.DataFrame([pg_data], columns=self._column_heading).iloc[:, :-1])
+                _pg_dataset = self._models[self._best_model].predict(pd.DataFrame([pg_data], columns=self._column_heading).iloc[:, :-1])
                 if isinstance(_pg_dataset, (str, int)):
                     _pg_dataset = [_pg_dataset]
                 if isinstance(_pg_dataset, (list, np.ndarray)):
