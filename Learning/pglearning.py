@@ -39,7 +39,7 @@ def create_session(object_type, subscription_level: int = 1, logger=None):
                                     },
               'caret':      {'1': pgpycaret.PGLearningCaret,
                              '2': pgpycaret.PGLearningCaretExt,
-                            '999': pgpycaret.PGLearningCaretSingleton,
+                             '999': pgpycaret.PGLearningCaretSingleton,
                             },
               }
 

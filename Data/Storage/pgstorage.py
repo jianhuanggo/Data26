@@ -42,8 +42,8 @@ def set_storage(object_type: str,
                                    '999': pglocaldisk.PGLocaldisk(),
                                    },
               "s3":               {'1': pgs3.PGS3(),
-                                   '2': pgs3.PGS3(),
-                                   '999': pgs3.PGS3(),
+                                   '2': pgs3.PGS3Ext(),
+                                   '999': pgs3.PGS3Ext(),
                                    },
               }
 
@@ -57,7 +57,6 @@ def set_storage(object_type: str,
                                    },
                  }
 
-
     try:
         if object_type not in action:
             pggenericfunc.pg_error_logger(_logger,
@@ -68,7 +67,6 @@ def set_storage(object_type: str,
         instance_session = action.get(object_type, None)[str(subscription_level)]
         if instance_session and storage_parameter:
             instance_session.set_param(**parameter.get(object_type, None)[str(subscription_level)])
-
 
         for sf_inst in storage_format_instance.values():
             #for val in sf_inst.values():
@@ -134,7 +132,9 @@ def pgstorage(object_type: str,
                         else:
                             #object_name_namespace = {_object_name: session}
                             #kwargs[variable_name] = {f"storage_{object_type}_{_object_name}": object_name_namespace}
-                            kwargs[variable_name] = {f"storage_{object_type}_{_object_name}": session}
+
+                            #kwargs[variable_name] = {f"storage_{object_type}_{_object_name}": session}
+                            kwargs[variable_name] = {object_type: session}
 
                     print(kwargs)
                 return func(*args, **kwargs)

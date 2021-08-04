@@ -1,7 +1,11 @@
+#https://pycaret.org/guide/
+
+import re
 import json
 import os
 import sys
 import inspect
+from pycaret.classification import *
 import pandas as pd
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator, Generic, TypeVar, Optional, List, Union
 from Learning import pglearningcommon1, pglearningbase, pglearning
@@ -9,9 +13,10 @@ from Meta import pgclassdefault, pggenericfunc
 from Data.Utils import pgoperation
 from Data.Storage import pgstorage
 from itertools import repeat
-from pycaret.classification import *
 from subprocess import Popen
+from Data.StorageFormat import pgstorageformat
 from Data.Utils import pgfile, pgdirectory, pgyaml
+from Learning.PGHub import pghub
 from sklearn.metrics import f1_score, recall_score, precision_score, accuracy_score, mean_squared_error, mean_absolute_error, mean_squared_log_error, r2_score
 from sklearn.model_selection import train_test_split, cross_val_score
 
@@ -55,7 +60,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         self._best_model = None
         self._model_result = {}
         self._model_metrics = None
-        self._model_training_client_id = 1
+        self._model_training_client_id = 0
         self._model_save_threshold = 0.75
         if not pgdirectory.createdirectory(self._parameter['dirpath']):
             sys.exit(99)
@@ -66,6 +71,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         self._X_train = self._X_test = self._y_train = self._y_test = None
         self.set_profile("default")
         self.clean_profile()
+        self._pg_hub = pghub.PGHubExt()
 
     @property
     def name(self):
@@ -87,8 +93,8 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         """
         try:
-            self._model_metrics = pg_parameters["overwrite"] if "overwrite" in pg_parameters else {'True': "f1",
-                                                                                                   'False': "neg_mean_squared_error"}.get(
+            self._model_metrics = pg_parameters["overwrite"] if "overwrite" in pg_parameters else {'True': "F1",
+                                                                                                   'False': "MSE"}.get(
                 str(len(pg_target_dataset.unique()) < 7))
             print(f"metrics is: {self._model_metrics}")
             return True
@@ -139,9 +145,10 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             return None
 
     def _model_train_automl(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
-                           pg_parameters: dict = None):
+                           pg_parameters: dict = None) -> bool:
         try:
-            if self._model_metrics == "f1":
+            if self._model_metrics == "F1":
+                _pg_model_type = "classification"
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
                     setup
                 experiment = setup(pg_dataset,
@@ -157,6 +164,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                    log_experiment=True,
                                    experiment_name=self._parameter['log_dir'])
             else:
+                _pg_model_type = "regression"
                 from pycaret.regression import automl, compare_models, tune_model, ensemble_model, blend_models, setup
                 experiment = setup(pg_dataset,
                                    silent=True,
@@ -171,28 +179,74 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                    log_experiment=True,
                                    experiment_name=self._parameter['log_dir'])
 
-            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+            print(pg_parameters)
 
+            _pg_num_selection = pg_parameters.get('num_selection', 5)
+
+            #_pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics) if _pg_model_type == "classification" else compare_models(n_select=_pg_num_selection)
             _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
+
+            print(f"_pg_best_models: {_pg_best_models}")
+            print(_pg_num_selection)
+            print(self._model_metrics)
+            print(_pg_model_type)
+
             # tune top 5 base models
-            _pg_tuned_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
+            # https://pycaret.org/tune-model/
+
+            #_pg_tuned_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models if i] if _pg_model_type == "classification" else [tune_model(i, optimize='MSE') for i in _pg_best_models if i]
+            #_pg_tuned_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models if i]
+
+            _pg_tuned_best_models = []
+            for _pg_model in _pg_best_models:
+                try:
+                    _pg_tuned = tune_model(_pg_model, optimize=self._model_metrics)
+                    if _pg_tuned:
+                        _pg_tuned_best_models.append(_pg_tuned)
+                except:
+                    continue
+
+
+
+            print("aaaaaaaaa")
+            print(f"_pg_tuned_best_models: {_pg_tuned_best_models}")
+            print("bbbbbbbbb")
+            #print(type(_pg_tuned_best_models))
+            print(len(_pg_tuned_best_models))
+
+
             # ensemble top 5 tuned models
-            _pg_bagged_best_models = [ensemble_model(i) for i in _pg_tuned_best_models]
+            #_pg_bagged_best_models = [ensemble_model(i) for i in _pg_tuned_best_models if i]
+            _pg_bagged_best_models = []
+            for _pg_model in _pg_tuned_best_models:
+                try:
+                    _pg_bagged = ensemble_model(_pg_model)
+                    if _pg_bagged:
+                        _pg_bagged_best_models.append(_pg_bagged)
+                except:
+                    continue
+
+
             # blend top 5 base models
             _pg_blender = blend_models(estimator_list=_pg_best_models)
             # select best model
             self._models["automl"] = automl(optimize=self._model_metrics)
-
+            print(self._models)
             self._model_result["automl"] = self.model_test("automl")
+
+            print(self._model_result)
+
+            return True
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-            raise
+            return False
 
     def _model_train_ensemble(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
-                           pg_parameters: dict = None):
+                           pg_parameters: dict = None) -> bool:
         try:
-            if self._model_metrics == "f1":
+            if self._model_metrics == "F1":
+                _pg_model_type = "classification"
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
                     setup
                 experiment = setup(pg_dataset,
@@ -208,6 +262,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                    log_experiment=True,
                                    experiment_name=self._parameter['log_dir'])
             else:
+                _pg_model_type = "regression"
                 from pycaret.regression import automl, compare_models, tune_model, ensemble_model, blend_models, setup
                 experiment = setup(pg_dataset,
                                    silent=True,
@@ -222,24 +277,26 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                    log_experiment=True,
                                    experiment_name=self._parameter['log_dir'])
 
-            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+            _pg_num_selection = pg_parameters.get('num_selection', 5)
 
             _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
-            _best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models]
+            _best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models if i]
 
             _best_models = _best_models[0]
             self._models["ensemble"] = ensemble_model(_best_models, method='Bagging', optimize=self._model_metrics)
 
             self._model_result["ensemble"] = self.model_test("ensemble")
 
+            return True
+
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-            raise
+            return False
 
     def _model_train_ransomforest(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None,
-                             pg_parameters: dict = None):
+                             pg_parameters: dict = None) -> bool:
         try:
-            if self._model_metrics == "f1":
+            if self._model_metrics == "F1":
                 from pycaret.classification import automl, compare_models, tune_model, ensemble_model, blend_models, \
                     setup
                 experiment = setup(pg_dataset,
@@ -269,24 +326,29 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                    log_experiment=True,
                                    experiment_name=self._parameter['log_dir'])
 
-            _pg_num_selection = pg_parameters['num_selection'] if "num_selection" in pg_parameters else 5
+            _pg_num_selection = pg_parameters.get('num_selection', 5)
 
             _pg_rf = create_model('rf')
             self._models["rf"] = tune_model(_pg_rf, optimize=self._model_metrics)
 
             self._model_result["rf"] = self.model_test("rf")
             print(self._model_result)
+            return True
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-            raise
+            return False
 
-    def model_train(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None, pg_parameters: dict = None):
+    def model_train(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None, pg_parameters: dict = None) -> Tuple[bool, str]:
         try:
-            self.model_metrics_sel(pg_dataset.iloc[:, -1], pg_parameters=pg_parameters)
-            self._model_train_automl(pg_dataset, pg_parameters=self._parameter)
-            self._model_train_ensemble(pg_dataset, pg_parameters=self._parameter)
-            self._model_train_ransomforest(pg_dataset, pg_parameters=self._parameter)
+            if not self.model_metrics_sel(pg_dataset.iloc[:, -1], pg_parameters=pg_parameters):
+                return False, "model_metrics_sel"
+            if not self._model_train_automl(pg_dataset, pg_parameters=self._parameter):
+                return False, "_model_train_automl"
+            if not self._model_train_ensemble(pg_dataset, pg_parameters=self._parameter):
+                return False, "_model_train_ensemble"
+            if self._model_train_ransomforest(pg_dataset, pg_parameters=self._parameter):
+                return False, "_model_train_ransomforest"
 
             #print(self._model_result["rf"][self._model_metrics])
 
@@ -302,10 +364,11 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
             #if self.model_test()['f1'] > self._model_save_threshold
                 #self.model_save(pg_parameters['entity_name'])
+            return True, ""
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-            raise
+            return False, "model_train"
 
     """
     def model_train(self, pg_dataset: Union[list, np.ndarray, pd.DataFrame] = None, data_scaler=None, pg_parameters: dict = None):
@@ -396,12 +459,15 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         try:
             print("start apply model to test dataset...")
 
-            if self._model_metrics == 'f1':
+            if self._model_metrics == 'F1':
                 _pg_calibrated_dt = calibrate_model(self._models[pg_model_name])
                 #print(_pg_calibrated_dt)
 
+            print(self._models)
+
+            # https://pycaret.org/predict-model/
             _pg_pred_holdout = predict_model(self._models[pg_model_name])
-            #print(_pg_pred_holdout)
+            print(_pg_pred_holdout)
             return self.pg_model_score(_pg_pred_holdout['target'].values.tolist(), _pg_pred_holdout['Label'].values.tolist())
 
             #_pg_pred_holdout.to_csv("/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test/output.csv")
@@ -441,10 +507,10 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             return {'accuracy': accuracy_score(_pg_actual, _pg_predicted),
                     'recall': recall_score(_pg_actual, _pg_predicted),
                     'precision': precision_score(_pg_actual, _pg_predicted),
-                    'f1': f1_score(_pg_actual, _pg_predicted)
-                    } if self._model_metrics == 'f1' else {'neg_mean_squared_error': mean_squared_error(_pg_actual, _pg_predicted),
+                    'F1': f1_score(_pg_actual, _pg_predicted)
+                    } if self._model_metrics == 'F1' else {'neg_mean_squared_error': mean_squared_error(_pg_actual, _pg_predicted),
                                                            'neg_mean_squared_log_error': mean_squared_log_error(_pg_actual, _pg_predicted),
-                                                           'neg_mean_absolute_error': mean_absolute_error(_pg_actual, _pg_predicted),
+                                                           'MSE': mean_absolute_error(_pg_actual, _pg_predicted),
                                                            'r2': r2_score(_pg_actual, _pg_predicted)}
         except Exception as err:
             return pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -460,15 +526,24 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return ""
 
-    def get_tasks(self, pg_data: Union[str, list, pd.DataFrame], pg_parameters: dict = {}) -> bool:
+    def get_tasks(self, pg_data: Union[str, list, dict], pg_parameters: dict = {}) -> bool:
 
         """Prepares inputs into a standard format
-        [(name(string), data(varies), parameters(dict)), (name1(string), data1(varies), parameters1(dict)), ...]
+        ######[(name(string), data(varies), parameters(dict)), (name1(string), data1(varies), parameters1(dict)), ...]
 
-        Three type of inputs:
-        1) if dataset is a string, then expects it to be a filename in yaml or csv format
-        2) if dataset is a list with no parameter, then expects to be the final format above
-        3) if dataset is a list with parameter, then it will convert it to be the final format above
+        [filename1, filename2, filename3...]
+        {"entity_name": [filename1, filename2, filename3 ...]}
+
+
+        Four type of inputs:
+            1) if dataset is a string, then it expects to be a filename in yaml or csv format with no entity_name
+            2) if dataset is a list with no parameter, then it expects to be a list of filename in yaml or csv format with no entity_name
+            3) if dataset is a dict, then it expects to be a filename in yaml or csv format with corresponding entity_name
+
+        Examples:
+            1) "<filepath1>"
+            2) ["<filepath1>", "<filepath2>"...]
+            3) {"<entity_name": ["<filepath1>", "<filepath2>"...]}
 
         Args:
             pg_data: data
@@ -477,67 +552,73 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         Returns:
 
         """
+        _pg_data = {}
+        print(f"I'm here ........{pg_data}")
         try:
-            """
-            if self._best_model:
-                pass
-            elif pgfile.isfileexist(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.pkl")):
-                self._best_model = self.model_load(self._parameter['entity_name'])
-                if self._best_model:
-                    print(f"model {self._parameter['entity_name']} loaded")
-            """
-            if self._best_model in self._models and self._models[self._best_model]:
-                pass
-            elif pgfile.isfileexist(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.pkl")):
-                with open(f"{self._parameter['entity_name']}.conf") as f: self._best_model = json.load(f)["model_name"]
-                self._models[self._best_model] = self.model_load(self._parameter['entity_name'])
-                if self._best_model in self._models and self._models[self._best_model]:
-                    print(f"model {self._parameter['entity_name']} loaded")
-            print(self._best_model)
-            print(self._models)
+            if not pg_data:
+                return True
 
+            print("I'm here2222 ........")
+
+                ### best model doesn't not exist, then attempt to load it
             if isinstance(pg_data, str):
-                _file_ext = pg_data.split('.')[-1]
-                if _file_ext in ("yml", "yaml"):
-                    self._data_inputs = [(key, item) for key, item in pgyaml.yaml_load(yaml_filename=pg_data).items()]
-                elif _file_ext in (".csv"):
-                    if "file_delimiter" in self._parameter:
-                        _df = pd.read_csv(pg_data, sep=self._parameter["file_delimiter"])
-                    else:
-                        print(pg_data)
-                        _df = pd.read_csv(pg_data, sep=',')
+                _pg_data = {re.split('_|\.', pg_data.split('/')[-1])[0]: pg_data}
+            elif isinstance(pg_data, list):
+                for _entity_name in [(re.split('_|\.', x.split('/')[-1])[0], x) for x in pg_data]:
+                    _pg_data[_entity_name[0]] = [_pg_data[_entity_name[0]], _entity_name[1]] if _entity_name[0] in _pg_data else _entity_name[1]
 
-                    if len(_df) < 100:
-                        pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name,
-                                                      "not enough data to train the models")
-                        raise
+            _pg_data = _pg_data or pg_data
 
-                    self._column_heading = _df.columns.values.tolist()
-                    self._parameter = {**self._parameter, **pg_parameters}
+            if isinstance(_pg_data, dict):
+                for _pg_entity, _pg_tgt_filepath in _pg_data.items():
 
-                    if self._models[self._best_model]:
-                        #self._data_inputs = [(x[0], x[1][0].split(',')) for x in zip(repeat(self._parameter['entity_name']), _df.values.tolist())] if "entity_name" in self._parameter else [x[0].split(',') for x in _df.values.tolist()]
-                        self._data_inputs = [x for x in zip(repeat(self._parameter['entity_name']), _df.values.tolist())] if "entity_name" in self._parameter else _df.values.tolist()
-                    else:
-                        if self._model_training_client_id % pg_parameters['num_client'] == pg_parameters['client_id']:
-                            print(f"client_id: {pg_parameters['client_id']}")
-                            #self._X_train, self._X_test, self._y_train, self._y_test = train_test_split(_df.iloc[:, :-1], _df.iloc[:, -1], test_size=0.2,
-                            #    shuffle=False)
-                            #self.model_train(pd.concat([self._X_train, self._y_train], axis=1), pg_parameters=self._parameter)
-                            #pg_data = pd.concat([self._X_test, self._y_test], axis=1)
-                            #self._data_inputs = [(x[0], x[1].split(',')) for x in zip(repeat(self._parameter['entity_name']),
-                            #                                pg_data.values.tolist())] if "entity_name" in self._parameter else [x.split(',') for x in
-                            #                                pg_data.values.tolist()]
-                            #self._data_inputs = [x for x in zip(repeat(self._parameter['entity_name']), pg_data.values.tolist())] if "entity_name" in self._parameter else pg_data.values.tolist()
-                            self.model_train(_df, pg_parameters=self._parameter)
+                    _pg_tgt_dir = '/'.join(_pg_tgt_filepath[0].split('/')[:-1]) if isinstance(_pg_tgt_filepath, list) else '/'.join(_pg_tgt_filepath.split('/')[:-1])
+                    _pg_model_filepath = _pg_tgt_dir or self._parameter['save_dir']
+                    if self._pg_hub.model_load(_pg_entity, {"directory": _pg_tgt_dir}) and pgfile.isfileexist(os.path.join(_pg_model_filepath, f"{_pg_entity}.pkl")) and pgfile.isfileexist(os.path.join(_pg_model_filepath, f"{_pg_entity}.conf")):
+                        with open(os.path.join(_pg_model_filepath, f"{_pg_entity}.conf")) as f: self._best_model = json.load(f)["model_name"]
+                        self._models[self._best_model] = self.model_load(os.path.join(_pg_model_filepath, f"{_pg_entity}"))
+                    ### verification
+                        if self._best_model in self._models and self._models[self._best_model]:
+                            print(f"model {_pg_entity} loaded")
+                            print(self._best_model)
+                            print(self._models)
+                            print(pg_data)
+                    print("I'm here33333 ........")
 
+                    ### substitute this code with storageformat
+                    with pgstorageformat.pg_set_storage_format(_pg_tgt_filepath) as fileformat:
+                        _df = fileformat["data"]
+                        print(_df)
 
-            elif isinstance(pg_data, list) and pg_parameters:
-                self._data_inputs = list(zip(pg_data, pg_parameters))
-            else:
-                pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, "pg_data needs to be a list or str")
-                return False
-            return True
+                        self._column_heading = _df.columns.values.tolist()
+                        print(self._column_heading)
+                        self._parameter = {**self._parameter, **pg_parameters}
+                        if self._models.get(self._best_model, None):
+                            self._data_inputs = {_pg_entity: {'data': _df, 'parameter': self._parameter}}
+                        # self._data_inputs = [(x[0], x[1][0].split(',')) for x in zip(repeat(self._parameter['entity_name']), _df.values.tolist())] if "entity_name" in self._parameter else [x[0].split(',') for x in _df.values.tolist()]
+                        # self._data_inputs = [x for x in zip(repeat(self._parameter['entity_name']), _df.values.tolist())] if "entity_name" in self._parameter else _df.values.tolist()
+
+                        else:
+
+                            if self._model_training_client_id % self._parameter.get('num_client', 1) == self._parameter.get('client_id', 0):
+                                print(f"client_id: {self._parameter.get('client_id', 0)}")
+                                print(self._parameter)
+                                # self._X_train, self._X_test, self._y_train, self._y_test = train_test_split(_df.iloc[:, :-1], _df.iloc[:, -1], test_size=0.2,
+                                #    shuffle=False)
+                                # self.model_train(pd.concat([self._X_train, self._y_train], axis=1), pg_parameters=self._parameter)
+                                # pg_data = pd.concat([self._X_test, self._y_test], axis=1)
+                                # self._data_inputs = [(x[0], x[1].split(',')) for x in zip(repeat(self._parameter['entity_name']),
+                                #                                pg_data.values.tolist())] if "entity_name" in self._parameter else [x.split(',') for x in
+                                #                                pg_data.values.tolist()]
+                                # self._data_inputs = [x for x in zip(repeat(self._parameter['entity_name']), pg_data.values.tolist())] if "entity_name" in self._parameter else pg_data.values.tolist()
+                                _pg_result, _pg_func = self.model_train(_df, pg_parameters=self._parameter)
+                                if not _pg_result:
+                                    print(f"Something wrong is in {_pg_func}")
+                                    return False
+                else:
+                    pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, "format not supported")
+                return True
+
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return False
@@ -545,14 +626,19 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
     def _process(self, pg_data_name: str, pg_data=None, pg_parameters: dict = {}) -> Union[float, int, None]:
         try:
             #print(self._best_model)
-            #print(pg_data)
-            #print(pg_data_name)
+            #print(f"pg_data1: {pg_data}")
+            #print(f"pg_data_name1: {pg_data_name}")
+            #print(f"pg_parameters1: {pg_parameters}")
+            if not pg_data:
+                return None
 
             if self._best_model in self._models and self._models[self._best_model]:
                 pass
             elif pgfile.isfileexist(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.pkl")):
-                with open(f"{self._parameter['entity_name']}.conf") as f: self._best_model = json.load(f)["model_name"]
-                self._models = self.model_load(self._parameter['entity_name'])
+                with open(os.path.join(self._parameter['save_dir'], f"{self._parameter['entity_name']}.conf")) as f: self._best_model = json.load(f)["model_name"]
+                self._models[self._best_model] = self.model_load(
+                    os.path.join(self._parameter['save_dir'], self._parameter['entity_name']))
+
                 if self._best_model in self._models and self._models[self._best_model]:
                     print(f"model {self._parameter['entity_name']} loaded")
 
@@ -576,13 +662,17 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
     def process(self, name: str = None, *args: object, **kwargs: object) -> bool:
         try:
+            if not self._data_inputs:
+                return True
             if name:
                 _item = self._data_inputs[name]
-                self._data[name] = self._process(_item['data'], _item['parameter'], )
+                #print(f"_item: {_item}")
+                #exit(0)
+                self._process(name, _item['data'], _item['parameter'], )
             else:
                 for _index, _data in self._data_inputs.items():
                     _item = self._data_inputs[_index]
-                    self._data[_index] = self._process(_item['data'], _item['parameter'])
+                    self._process(name, _item['data'], _item['parameter'])
             return True
 
         except Exception as err:
@@ -627,24 +717,31 @@ class PGLearningCaretSingleton(PGLearningCaret):
 
 
 if __name__ == '__main__':
+
+    """
     a = pd.read_csv("/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test/output.csv")
     print(a['target'].values.tolist())
     print(f1_score(a['target'].values.tolist(), a['Label'].values.tolist()))
     print(accuracy_score(a['target'].values.tolist(), a['Label'].values.tolist()))
     print(recall_score(a['target'].values.tolist(), a['Label'].values.tolist()))
     print(precision_score(a['target'].values.tolist(), a['Label'].values.tolist()))
+    """
 
+    #_data = pd.read_csv('/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test2/heart1.csv')
+    #print(_data.isnull().sum())
+    #exit(0)
 
-    exit(0)
     test = PGLearningCaretExt()
     test.set_profile("default")
-    filepath = "/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Input/heart.csv"
+    filepath = "/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Input/heart1.csv"
     #test.preprocessing(pd.read_csv(filepath))
-    test.preprocessing(pd.read_csv(filepath))
+    #test.preprocessing(pd.read_csv(filepath))
+    #test.get_tasks(filepath)
+    test.get_tasks(['/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test2/heart1.csv'])
+    print(f"data input: {test._data_inputs}")
     exit(0)
-    test.get_tasks(filepath)
-    print(test._data_inputs)
-    test._process(*test._data_inputs[0])
+    test.process("heart")
+    print(f"data : {test.data}")
     #test._process("heart", pd.read_csv(filepath))
     exit(0)
     test.model_train(pd.read_csv(filepath), parameters={'name': 'heart'})

@@ -1,15 +1,15 @@
 """
 Exclusively for the purpose of managing daemon
 """
-
-import contextlib
-import functools
-import inspect
+import os
 import json
+import inspect
+import functools
+import contextlib
+import pandas as pd
 from types import SimpleNamespace
 from typing import Callable, Any, TypeVar
 
-import pandas as pd
 
 from Data.StorageFormat import pgcsv
 from Data.StorageFormat import pgjson
@@ -29,22 +29,126 @@ myfunction = getattr(mymodule, 'myfunction')
 
 myfunction(parameter1, parameter2)
 
+
+
+
+_file_ext = pg_data.split('.')[-1]
+if _file_ext in ("yml", "yaml"):
+    self._data_inputs = [(key, item) for key, item in
+                         pgyaml.yaml_load(yaml_filename=pg_data).items()]
+elif _file_ext in (".csv"):
+    if "file_delimiter" in self._parameter:
+        _df = pd.read_csv(pg_data, sep=self._parameter["file_delimiter"])
+    else:
+        # print(pg_data)
+        _df = pd.read_csv(pg_data, sep=',')
+        if len(_df) < 100:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name,
+                                          "not enough data to train the models")
+            raise
 """
 
+
+def pg_sf_validate(file_info: dict) -> bool:
+    _pg_sanity_check = {"0": True if file_info.get("content_size", 0) >= .1 * file_info.get("file_size", 0) else False
+    }
+    for _pg_sc_num, _pg_sc_logic in _pg_sanity_check.items():
+        if not _pg_sc_logic:
+            print(f"file format sanity check #{_pg_sc_num} failed, data is probably not good")
+            return False
+    return True
+
+
+def pg_sf_size(pg_data) -> int:
+    if isinstance(pg_data, pd.DataFrame):
+        return pg_data.size
+    else:
+        return len(pg_data) if pg_data else 0
+
+
+def pg_md_autofill_df(pg_data: pd.DataFrame, pg_method: str = "drop"):
+    #pg_data.isna()
+    #pg_data.isnull().sum()
+    #pg_data.notna()
+    #pg_data.notnull()
+    #pg_data[pg_data.isnull().any(axis=1)]
+    #
+    pg_data.dropna(inplace=True) if pg_method == "drop" else pg_data.fillna(pg_data.mean(), inplace=True)
+    return pg_data
+
+
+def pg_md_autofill_default(pg_data):
+    return pg_data
+
+
+def pg_missing_data_autofill(pg_data, pg_sf, _logger=None):
+    _storage_format = {'csv': pg_md_autofill_df,
+                       'json': pg_md_autofill_default,
+                       'yaml': pg_md_autofill_default
+                       }
+    try:
+        return _storage_format.get(pg_sf, None)(pg_data) if _storage_format.get(pg_sf, None) else None
+
+    except Exception as err:
+        pggenericfunc.pg_error_logger(_logger,
+                                      inspect.currentframe().f_code.co_name,
+                                      err)
+    return None
+
+
 @contextlib.contextmanager
-def pg_set_storage_format(file, _logger=None):
+def pg_set_storage_format(pg_files, _logger=None):
     _storage_format = {'csv': pd.read_csv,
                        'json': json.loads,
                        'yaml': pgyaml.yaml_load
     }
-    print(file)
-    for key, item in _storage_format.items():
+
+    if isinstance(pg_files, dict):
+        pg_files = [x for y in [val for _, val in pg_files.items()] for x in y]
+    elif isinstance(pg_files, str):
+        pg_files = [pg_files]
+    elif isinstance(pg_files, list):
+        pass
+    else:
+        print("Unsupport file format")
+
+    for _pg_file in pg_files:
         try:
-            yield {"file_format": key,
-                   "data": item(file)
-                   }
+            _file_ext = _pg_file.split('.')[-1]
+            _pg_data = _storage_format.get(_file_ext, None)(_pg_file)
+
+            _pg_data = pg_missing_data_autofill(_pg_data, _file_ext)
+
+            print(_pg_data)
+            #print("aaaaaa1111")
+            #print(type(_pg_data))
+            #print(pg_sf_size(_pg_data))
+            #exit(0)
+
+            if _pg_data is not None and pg_sf_validate({"file_size": os.path.getsize(_pg_file),
+                                                        "content_size": pg_sf_size(_pg_data)}):
+                yield {"file_format": _file_ext,
+                       "data": _pg_data
+                       }
+            else:
+                pggenericfunc.pg_error_logger(_logger,
+                                              inspect.currentframe().f_code.co_name,
+                                              "file format detection by file extension is unsuccessful")
         except Exception as err:
-            continue
+            pggenericfunc.pg_error_logger(_logger,
+                                          inspect.currentframe().f_code.co_name,
+                                          err)
+        #exit(0)
+        for key, item in _storage_format.items():
+            try:
+                _pg_data = item(_pg_file)
+                if pg_sf_validate({"file_size": os.path.getsize(_pg_file), "content_size": pg_sf_size(_pg_data)}):
+                    yield {"file_format": key,
+                           "data": pg_missing_data_autofill(_pg_data, key)
+                           }
+            except Exception as err:
+                continue
+
 
 @contextlib.contextmanager
 def set_storage_format(object_type: str,
