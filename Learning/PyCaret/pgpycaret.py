@@ -45,13 +45,11 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         self._name = "learningcaret"
         self._learning_type = "supervised"
         self._model_type = "supervised"
-        self._agent = None
-        self._min_record_cnt_4_pred = 1
         self._data = {}
         self._pattern_match = {}
         self._parameter = {'storage_type': 'localdisk',  # default storage to save and load models
                            'storage_name': 'lr',  # name of storage
-                           'dirpath': pgdirectory.get_filename_from_dirpath(__file__) + "/model",
+                           'default_model_dir': os.path.join(pgdirectory.get_filename_from_dirpath(__file__), "/model"),
                            'test_size': 0.2}  # if test_flag set to true, percentage of data will be used as testing dataset
 
         self._column_heading = None
@@ -62,7 +60,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
         self._model_metrics = None
         self._model_training_client_id = 0
         self._model_save_threshold = 0.75
-        if not pgdirectory.createdirectory(self._parameter['dirpath']):
+        if not pgdirectory.createdirectory(self._parameter['default_model_dir']):
             sys.exit(99)
 
         self._model_distribution_strategy = "centralStoragestrategy"
@@ -116,7 +114,9 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
 
         """
         try:
-            with open (pg_parameters["dir"], "w") as f: json.dump(self._best_model, f)
+            _pg_save_dir = pg_parameters.get("dir", None) or self._parameter['default_model_dir']
+            with open(_pg_save_dir, "w") as f:
+                json.dump(self._best_model, f)
             return save_model(pg_model, model_name=pg_entity_name)
 
         except Exception as err:
@@ -280,9 +280,18 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             _pg_num_selection = pg_parameters.get('num_selection', 5)
 
             _pg_best_models = compare_models(n_select=_pg_num_selection, sort=self._model_metrics)
-            _best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models if i]
+            #_best_models = [tune_model(i, optimize=self._model_metrics) for i in _pg_best_models if i]
 
-            _best_models = _best_models[0]
+            _pg_tuned_best_models = []
+            for _pg_model in _pg_best_models:
+                try:
+                    _pg_tuned = tune_model(_pg_model, optimize=self._model_metrics)
+                    if _pg_tuned:
+                        _pg_tuned_best_models.append(_pg_tuned)
+                except:
+                    continue
+
+            _best_models = _pg_tuned_best_models[0]
             self._models["ensemble"] = ensemble_model(_best_models, method='Bagging', optimize=self._model_metrics)
 
             self._model_result["ensemble"] = self.model_test("ensemble")
@@ -329,9 +338,17 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             _pg_num_selection = pg_parameters.get('num_selection', 5)
 
             _pg_rf = create_model('rf')
-            self._models["rf"] = tune_model(_pg_rf, optimize=self._model_metrics)
+            print("here here here")
 
+            for i in range(3):
+                try:
+                    self._models["rf"] = tune_model(_pg_rf, optimize=self._model_metrics)
+                    break
+                except Exception as err:
+                    print(err)
+                    continue
             self._model_result["rf"] = self.model_test("rf")
+
             print(self._model_result)
             return True
 
@@ -347,7 +364,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                 return False, "_model_train_automl"
             if not self._model_train_ensemble(pg_dataset, pg_parameters=self._parameter):
                 return False, "_model_train_ensemble"
-            if self._model_train_ransomforest(pg_dataset, pg_parameters=self._parameter):
+            if not self._model_train_ransomforest(pg_dataset, pg_parameters=self._parameter):
                 return False, "_model_train_ransomforest"
 
             #print(self._model_result["rf"][self._model_metrics])
@@ -358,9 +375,10 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             self._best_model = list(_sorted_comp_dict.keys())[0]
             print(f"picked model: {self._best_model}")
 
-            print(int(self._model_result[self._best_model][self._model_metrics]) > int(self._model_save_threshold))
-
-            self.model_save(self._models[self._best_model], pg_parameters['entity_name'])
+            if int(self._model_result[self._best_model][self._model_metrics]) > int(self._model_save_threshold):
+                self.model_save(self._models[self._best_model], pg_parameters['entity_name'])
+            else:
+                self.model_save(self._models[self._best_model], pg_parameters['entity_name'])
 
             #if self.model_test()['f1'] > self._model_save_threshold
                 #self.model_save(pg_parameters['entity_name'])
@@ -468,7 +486,8 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
             # https://pycaret.org/predict-model/
             _pg_pred_holdout = predict_model(self._models[pg_model_name])
             print(_pg_pred_holdout)
-            return self.pg_model_score(_pg_pred_holdout['target'].values.tolist(), _pg_pred_holdout['Label'].values.tolist())
+            #return self.pg_model_score(_pg_pred_holdout['target'].values.tolist(), _pg_pred_holdout['Label'].values.tolist())
+            return self.pg_model_score(_pg_pred_holdout.iloc[:, -1].values.tolist(), _pg_pred_holdout['Label'].values.tolist())
 
             #_pg_pred_holdout.to_csv("/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test/output.csv")
             #print([x for x in zip(_pg_pred_holdout['target'].values.tolist(), _pg_pred_holdout.iloc['Label'].values.tolist())])
@@ -611,7 +630,7 @@ class PGLearningCaret(pglearningbase.PGLearningBase, pglearningcommon1.PGLearnin
                                 #                                pg_data.values.tolist())] if "entity_name" in self._parameter else [x.split(',') for x in
                                 #                                pg_data.values.tolist()]
                                 # self._data_inputs = [x for x in zip(repeat(self._parameter['entity_name']), pg_data.values.tolist())] if "entity_name" in self._parameter else pg_data.values.tolist()
-                                _pg_result, _pg_func = self.model_train(_df, pg_parameters=self._parameter)
+                                _pg_result, _pg_func = self.model_train(_df, pg_parameters={**self._parameter, **{"entity_name": _pg_entity}})
                                 if not _pg_result:
                                     print(f"Something wrong is in {_pg_func}")
                                     return False
@@ -728,6 +747,8 @@ if __name__ == '__main__':
     """
 
     #_data = pd.read_csv('/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/Learning/PyCaret/Test2/heart1.csv')
+    #print(_data)
+    #print(_data.iloc[: , -1].values.tolist())
     #print(_data.isnull().sum())
     #exit(0)
 

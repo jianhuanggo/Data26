@@ -91,7 +91,7 @@ class PGMysqlLite(pgdbbase.PGDBBase, pgclassdefault.PGClassDefault):
             elif err.errno == connector.errorcode.ER_BAD_DB_ERROR:
                 print("Database does not exist")
             else:
-                pass
+                print("Please make sure database parameters in ini are set appropriately")
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
@@ -323,7 +323,7 @@ class PGMysqlLiteExt(PGMysqlLite):
             return False
         return True
 
-    def simple_query(self, query_in: str, mode="select"):
+    def simple_query(self, query_in: str, mode: str ="select"):
         """
         Simply query takes a SQL and return back results in a list of tuples
         """
@@ -357,7 +357,8 @@ class PGMysqlLiteExt(PGMysqlLite):
         # print(f" Start insert data for ...")
         # mysql.simple_query(f"update stock_queue set status = 'WIP' where stock_symbol = '{stock_symbol}'")
         try:
-            if isinstance(pg_data, dict): pg_data = list(pg_data)
+            if isinstance(pg_data, dict):
+                pg_data = list(pg_data)
             for _data_item in pg_data:
                 if not self.populate_data(table_name=pg_table_name, mode="simple", data_in=_data_item) and exception_dirpath:
                     with open(exception_dirpath, 'a') as exception_file:
@@ -368,7 +369,7 @@ class PGMysqlLiteExt(PGMysqlLite):
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-            return False
+        return False
 
 
 if __name__ == '__main__':

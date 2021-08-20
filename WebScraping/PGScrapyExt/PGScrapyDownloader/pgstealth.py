@@ -58,6 +58,9 @@ class PGScrapyStealth(pgscrapybase.PGScrapyBase, pgwebscrapingcommon.PGWebScrapi
             response = await page.goto(request.url)
             # await page.screenshot({"path": "realtor.png", "fullPage": True})
             _content = await page.content()
+            values = await page.evaluate('''() => [...document.querySelectorAll('.table')]
+                               .map(element => element.getAttribute('data-options'))
+                ''')
             body = str.encode(_content)
             await page.close()
             await browser.close()

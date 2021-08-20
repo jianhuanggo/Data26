@@ -50,10 +50,13 @@ class PGScrapyPpeteer(pgscrapybase.PGScrapyBase, pgwebscrapingcommon.PGWebScrapi
             response = await page.goto(
                 request.url,
                 options={
-                    'timeout': 20000,
+                    'timeout': 300000,
                 }
             )
             content = await page.content()
+            values = await page.evaluate('''() => [...document.querySelectorAll('.table')]
+                               .map(element => element.getAttribute('data-options'))
+                ''')
             body = str.encode(content, 'utf-8')
             await page.close()
             await browser.close()

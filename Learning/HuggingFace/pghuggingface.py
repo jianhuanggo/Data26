@@ -18,6 +18,7 @@ from transformers import AutoTokenizer, AutoModel
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+###url="https://huggingface.co/transformers/v3.0.2/main_classes/pipelines.html"
 
 __version__ = "1.7"
 
