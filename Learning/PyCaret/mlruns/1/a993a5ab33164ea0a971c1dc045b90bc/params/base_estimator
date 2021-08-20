@@ -1,2 +1,0 @@
-AdaBoostRegressor(base_estimator=None, learning_rate=0.2, loss='linear',
-                  n_estimators=110, random_state=8696)

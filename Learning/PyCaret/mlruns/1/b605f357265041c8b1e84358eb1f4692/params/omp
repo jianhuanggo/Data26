@@ -1,2 +1,0 @@
-OrthogonalMatchingPursuit(fit_intercept=True, n_nonzero_coefs=None,
-                          normalize=True, precompute='auto', tol=None)
