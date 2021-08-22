@@ -7,7 +7,9 @@ from bs4 import BeautifulSoup
 from requests_html import HTMLSession
 from collections import Counter
 from pathlib import Path
-from transformers import pipeline, AutoModelForTokenClassification, AutoTokenizer
+from transformers import AutoTokenizer, AutoModelForTokenClassification
+from transformers import pipeline
+from transformers import AutoModelForTokenClassification, AutoTokenizer
 
 
 #https://gist.github.com/Fluidbyte/2973986#file-common-currency-json
@@ -35,6 +37,56 @@ def data_acquisition(filepath: str, top_data_num: int = 1):
 
         ### get 5 layer depth
         a = sorted([(len(x), num) for num, x in enumerate(y)], key=lambda x: x[0], reverse=True)
+        print(a)
+        return y, [x[1] for x in a[:top_data_num]]
+
+def data_acquisition1(filepath: str, top_data_num: int = 1):
+    result = []
+    with open(filepath) as file:
+        x = file.read()
+        soup = BeautifulSoup(x, 'html.parser')
+        y = soup.find_all("div")
+
+        for _index, item in enumerate(y):
+            result.append((item, 1, _index,  len(item)))
+
+        print([x[1:] for x in result])
+
+        _result1 = [x[0] for x in result]
+        #print(_result1)
+        print(len(result))
+
+        for _index1, item1 in enumerate(_result1):
+            result.append((item1, 2, _index1,  len(item)))
+
+        print([x[1:] for x in result])
+        print(len(result))
+
+        a = sorted([x for x in result], key=lambda x: x[3], reverse=True)
+        print([x[1:] for x in a])
+        print(len(a))
+        exit(0)
+
+
+        ### get 5 layer depth
+        a = sorted([(len(x), num) for num, x in enumerate(y)], key=lambda x: x[0], reverse=True)
+        print(a)
+        return y, [x[1] for x in a[:top_data_num]]
+
+
+def data_acquisition2(filepath: str, top_data_num: int = 1):
+    with open(filepath) as file:
+        x = file.read()
+        soup = BeautifulSoup(x, 'html.parser')
+        y = soup.find_all("div")
+
+        ### get 5 layer depth
+        a = sorted([(get_count(str(x), 'div'), num) for num, x in enumerate(y)], key=lambda x: x[0], reverse=True)
+        print(a)
+        #print(y[241])
+        #b = a[0][1]
+        #print(y[b])
+        #exit(0)
         return y, [x[1] for x in a[:top_data_num]]
 
 #url = "https://wax.atomichub.io/market?collection_name=mlb.topps&order=asc&sort=price&symbol=WAX"
@@ -197,8 +249,19 @@ def pg_detect_price(pg_data):
             # print({_val["symbol"]: _ind for _ind, _val in enumerate(_pg_currency.values())})
     return False
 
-#print(pg_detect_price("($0.28)"))
-#exit(0)
+
+def assign_label(data: str):
+    tokenizer = AutoTokenizer.from_pretrained("dslim/bert-base-NER")
+    model = AutoModelForTokenClassification.from_pretrained("dslim/bert-base-NER")
+
+    nlp = pipeline("ner", model=model, tokenizer=tokenizer)
+    example = "My name is Wolfgang and I live in Berlin"
+
+    ner_results = nlp(example)
+    print(ner_results)
+
+    #print(pg_detect_price("($0.28)"))
+    #exit(0)
 
 def pg_detect_default(pg_data):
     return True
@@ -221,43 +284,95 @@ def f8(seq):
     seen = set()
     seen_add = seen.add
     return {pg_generate_label(x[0], x[1], ind): pg_to_str(x[1]) for ind, x in enumerate(seq) if x[1] and not (x[1] in seen or seen_add(x[1]))}
+    #a = [x for x in seq if x[1] and not (x[1] in seen or seen_add(x[1]))]
+    #print(a)
+    #exit(0)
 
 
 def extract_data(pg_data):
+
+    print("aaaaa")
+
     _summary = []
     for index, item in enumerate(pg_data):
-        _data = []
-        #print(item)
-        #print(f7(sorted(tag.name for tag in item.find_all())))
-        for x in f7(sorted((tag.name for tag in item.find_all()))):
-            for sub_item in item.find_all(x):
-                _data += extract_v2(x, sub_item)
+        try:
+            _data = []
+            #print(item)
+            #print(f"item: {item}")
+            print(f"tags: {f7(sorted(tag.name for tag in item.find_all()))}")
+            for x in f7(sorted((tag.name for tag in item.find_all()))):
+                for sub_item in item.find_all(x):
+                    _data += extract_v2(x, sub_item)
 
-        for x in ('a', 'div'):
-            _result = extract_3(x, item)
-            _data += _result if _result else []
+            for x in ('a', 'div'):
+                _result = extract_3(x, item)
+                _data += _result if _result else []
 
-        #print(set(_data + extract_v3("div", item)))
+            #print(set(_data + extract_v3("div", item)))
 
-        print(f8(_data))
+            print(f8(_data))
+        except Exception as err:
+            continue
         #exit(0)
         #print({f"attrib_{_ind}": _val for _ind, _val in enumerate(set(_data)) if _val})
     print(_summary)
 
+    #summarizer = pipeline("summarization")
+    #print(summarizer("Sam Shleifer writes the best docstring examples in the whole world", min_length=5, max_length=20))
+
+def get_count(pg_data, pg_tag):
+    return pg_data.count(f"<{pg_tag}")
+
+
+def test_case(dirpath: str, filename: str):
+    Path(os.path.join(dirpath, filename))
+
+    if Path.exists:
+        _pg_data, _pg_data_index = data_acquisition(os.path.join(dirpath, filename))
+        print(_pg_data_index)
+        for item in _pg_data_index:
+            extract_data(_pg_data[item])
+
 
 if __name__ == "__main__":
-    summarizer = pipeline("summarization")
-    summarizer("Sam Shleifer writes the best docstring examples in the whole world", min_length=5, max_length=20)
+    #assign_label()
+    #exit(0)
+
+
+    _pg_file_dir = "/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/API/Finance/PGPaniniTracker/Data/"
+    #Path(os.path.join(_pg_file_dir, "selenium.txt"))
+    test_case(_pg_file_dir, "selenium.txt")
+    test_case(_pg_file_dir, "selenium.txt.backup.08192021")
+    test_case(_pg_file_dir, "ad8ef04b_selenium.txt")
 
     exit(0)
 
 
-    _pg_file_dir = "/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/API/Finance/PGPaniniTracker/Data/"
-    Path(os.path.join(_pg_file_dir, "selenium.txt"))
+    Path(os.path.join(_pg_file_dir, "ad8ef04b_selenium.txt"))
+
     if Path.exists:
-        _pg_data, _pg_data_index = data_acquisition('/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/API/Finance/PGPaniniTracker/Data/selenium.txt')
+        _pg_data, _pg_data_index = data_acquisition2(os.path.join(_pg_file_dir, "ad8ef04b_selenium.txt"))
+        print(_pg_data_index)
         for item in _pg_data_index:
+            #print(_pg_data[item])
+
+            #print(sorted([(get_count(str(y), 'div'), x) for x, y in enumerate(_pg_data[item])], key=lambda x: x[0], reverse=True))
+            print(sorted([(get_count(str(y), 'div'), x) for x, y in enumerate(_pg_data[241])], key=lambda x: x[0], reverse=True))
+            #for _ind1, _itm1 in enumerate(_pg_data[item]):
+            #for _ind1, _itm1 in enumerate(_pg_data[241]):
+                #if _ind1 == 15:
+                #    print(_itm1)
+                #    print(f"len: {get_count(str(_itm1), 'div')}")
+                #    exit(0)
+            #for index, item1 in enumerate(_pg_data[item]):
+            #    print(len(item1), index)
+            #exit(0)
+
+
+
+
             extract_data(_pg_data[item])
+            #extract_data(_pg_data[241])
     exit(0)
 
 

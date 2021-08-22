@@ -16,6 +16,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator
+from Data.Utils import pgfile
 
 logging.getLogger('websockets').setLevel(logging.WARNING)
 logging.getLogger('pyppeteer').setLevel(logging.WARNING)
@@ -92,7 +93,7 @@ class PGScrapyStealth(pgscrapybase.PGScrapyBase, pgwebscrapingcommon.PGWebScrapi
             #browser.implicitly_wait(30)
             logs = browser.get_log('performance')
             print(logs)
-            self.pg_dump("selenium", browser.page_source)
+            self.pg_dump(pgfile.get_random_filename("selenium"), browser.page_source)
             print(browser.page_source)
             #print(get_status(logs))
 
@@ -158,8 +159,12 @@ if __name__ == '__main__':
     test = PGScrapyStealth()
     #_url = "https://www.realtor.com/soldhomeprices/Suwanee_GA"
     #_url = "https://wax.atomichub.io/market?collection_name=mlb.topps&order=asc&sort=price&symbol=WAX"
-    _url = "https://www.paniniamerica.net/blockchain/public-auctions/public-auctions/public-auctions.html?sport=Football&p=1&sortBy=priceL"
+
     #_url = "https://www.paniniamerica.net/blockchain/public-auctions/public-auctions/public-auctions.html?sortBy=end_time&p=2&sport=Football"
+
+    #_url = "https://www.paniniamerica.net/blockchain/public-auctions/public-auctions/public-auctions.html?sport=Football&p=1&sortBy=priceL"
+
+    _url = "https://www.realtor.com/soldhomeprices/Alpharetta_GA/pg-2"
     _request = SimpleNamespace(url=_url)
     #_result = test.run_stealth(_request)
     _result = test.run_selenium(_request)
