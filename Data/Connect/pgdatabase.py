@@ -39,8 +39,9 @@ def create_session(db_name):
         print(f"In the exception clause!!!")
         instance.session.rollback()
         raise (f"Something wrong with the session {e}")
-    except BaseException as e:
-        raise ('Wrong!!! %v'.format(e))
+    #except BaseException as e:
+    #    print(e)
+    #    raise ('Wrong!!! %v'.format(e))
     #finally:
     #    instance.session.close()
     #    instance.engine.dispose()

@@ -21,6 +21,8 @@ from Data.Utils import pgfile
 logging.getLogger('websockets').setLevel(logging.WARNING)
 logging.getLogger('pyppeteer').setLevel(logging.WARNING)
 
+__version__ = "1.8"
+
 _RESULT="SUCCESS"
 #https://javascriptwebscrapingguy.com/avoid-being-blocked-with-puppeteer/
 #Best implementation: JavaScript
@@ -164,7 +166,16 @@ if __name__ == '__main__':
 
     #_url = "https://www.paniniamerica.net/blockchain/public-auctions/public-auctions/public-auctions.html?sport=Football&p=1&sortBy=priceL"
 
-    _url = "https://www.realtor.com/soldhomeprices/Alpharetta_GA/pg-2"
+    #_url = "https://www.realtor.com/soldhomeprices/Alpharetta_GA/pg-2"
+    #_url = "https://www.paniniamerica.net/blockchain/public-auctions/sales/recent-sales.html"
+
+    #_url = "https://www.indeed.com/jobs?q=aws&fromage=3&remotejob=032b3046-06a3-4876-8dfd-474eb5e7ed11&vjk=c255d87b8462a684"
+
+    #_url = "https://opensea.io/assets?search[sortAscending]=false&search[sortBy]=LAST_SALE_DATE"
+
+    _url = "https://www.forbes.com/fintech/2021/#9b6b99531a63"
+
+
     _request = SimpleNamespace(url=_url)
     #_result = test.run_stealth(_request)
     _result = test.run_selenium(_request)

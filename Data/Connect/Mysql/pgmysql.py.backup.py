@@ -283,30 +283,59 @@ class PGMysqlLiteExt(PGMysqlLite):
         if database_name is None:
             database_name = self._db
 
+        new_data = []
         if isinstance(data, dict):
             data = [data]
 
-        try:
-            new_data = [StrFunc.wordtransform({f"{self._column_prefix}_{k}": v for k, v in _data.items()}) for _data in
-                        data]
-            insert_query_part1 = f"INSERT INTO {table_name} ( "
+        for _data in data:
+            new_data.append({f"{self._column_prefix}_{k}": v for k, v in _data.items()})
+        insert_query_part1 = f"INSERT INTO {table_name} ( "
+
+        """
+        if mode == "bulk":
+            table_query = f"SELECT column_name FROM " \
+                          f"information_schema.columns WHERE table_schema = '{database_name}' " \
+                          f"AND table_name = '{table_name}'"
+            column_list = self.simple_query(table_query)
+            for item in column_list:
+                column_name = item[0]
+                if column_name == column_list[-1][0]:
+                    insert_query_part1 += f"{column_name} )"
+                else:
+                    insert_query_part1 += f"{column_name}, "
+            insert_query_part2 = " VALUES ( " + (len(data[0]) - 1) * "%s, " + "%s )"
+        """
+        if mode == "bulk":
+            insert_query_part2 = f" VALUES ( "
             for key, val in new_data[0].items():
                 if key == list(new_data[0].keys())[-1]:
                     insert_query_part1 += f"{key} )"
                 else:
                     insert_query_part1 += f"{key}, "
             insert_query_part2 = " VALUES ( " + (len(data[0]) - 1) * "%s, " + "%s )"
-            # print(new_data)
-            # print(mode)
-            _pg_records = [tuple(x.values()) for x in new_data]
+        else:
+            insert_query_part2 = f" VALUES ( "
+            for key, val in new_data.items():
+                if key == list(new_data.keys())[-1]:
+                    insert_query_part1 += f"{key} )"
+                    insert_query_part2 += f"%({key})s )"
+                else:
+                    insert_query_part1 += f"{key}, "
+                    insert_query_part2 += f"%({key})s, "
 
+        print(new_data)
+        print(mode)
+        #print(f"{insert_query_part1} {insert_query_part2}")
+
+        try:
             cursor = self._cnx.cursor()
             if mode == "bulk":
-                cursor.executemany(f"{insert_query_part1} {insert_query_part2}", _pg_records)
-                print(f"inserted {len(new_data)} records to table {table_name}")
+                cursor.executemany(f"{insert_query_part1} {insert_query_part2}", [tuple(x.values()) for x in new_data])
+                num_of_records = len(new_data)
+                print(f"inserted {num_of_records} records to table {table_name}")
             else:
-                for _pg_record in _pg_records:
-                    cursor.execute(f"{insert_query_part1} {insert_query_part2}", _pg_record)
+                print(StrFunc.wordtransform(new_data[0]))
+                cursor.execute(f"{insert_query_part1} {insert_query_part2}", StrFunc.wordtransform(new_data[0]))
                 print(f"inserted 1 record to table {table_name}")
             cursor.close()
             self._cnx.commit()
@@ -350,7 +379,7 @@ class PGMysqlLiteExt(PGMysqlLite):
         # mysql.simple_query(f"update stock_queue set status = 'WIP' where stock_symbol = '{stock_symbol}'")
 
         try:
-            _pg_mode = "bulk" if len(pg_data) > 40 else "simple"
+            _pg_mode = "bulk" if len(pg_data) > 200 else "simple"
             if isinstance(pg_data, dict):
                 pg_data = list(pg_data)
             if _pg_mode == "bulk":

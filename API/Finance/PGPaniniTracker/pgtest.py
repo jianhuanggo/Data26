@@ -140,19 +140,28 @@ def extract_v2(label, elements):
     _total = []
     while True:
         try:
+            #print(type(elements))
+            #print(len(elements))
             if isinstance(elements, str):
                 return [(label, elements)]
             elif len(elements) == 0:
-                if label == "img":
-                    _elem = elements['src'] or elements.find_all('img')['src']
-                    return [(label, _elem)]
+                try:
+                    if label == "img":
+                        _elem = elements['src'] or elements.find_all('img')['src']
+                        return [(label, _elem)]
+                except Exception as err:
+                    return []
                 return [(label, elements.text)]
             elif len(elements) == 1:
-                if label == "img":
-                    _elem = elements[0]['src'] or elements.find_all('img')['src']
-                    return [(label, _elem)]
+                try:
+                    if label == "img":
+                        _elem = elements[0]['src'] or elements.find_all('img')['src']
+                        return [(label, _elem)]
+                except Exception as err:
+                    return []
                 return [(label, elements.text)]
             else:
+                #print(len(str(elements)))
                 for sub_item in elements:
                     _total += extract_v2(label, sub_item)
                 return _total
@@ -291,17 +300,20 @@ def f8(seq):
 
 def extract_data(pg_data):
 
-    print("aaaaa")
+    #print("aaaaa")
 
     _summary = []
     for index, item in enumerate(pg_data):
         try:
+            #print(f"index: {index}")
+            #print(f"length: {len(item)}")
             _data = []
             #print(item)
             #print(f"item: {item}")
-            print(f"tags: {f7(sorted(tag.name for tag in item.find_all()))}")
+            #print(f"tags: {f7(sorted(tag.name for tag in item.find_all()))}")
             for x in f7(sorted((tag.name for tag in item.find_all()))):
                 for sub_item in item.find_all(x):
+                    #print(f"x: {x}")
                     _data += extract_v2(x, sub_item)
 
             for x in ('a', 'div'):
@@ -320,6 +332,88 @@ def extract_data(pg_data):
     #summarizer = pipeline("summarization")
     #print(summarizer("Sam Shleifer writes the best docstring examples in the whole world", min_length=5, max_length=20))
 
+
+
+
+def extract_data2(pg_data):
+    _summary = []
+    #print(type(pg_data))
+    #print(len(pg_data))
+    while len(pg_data) > 3:
+        _sorted = sorted([(len(str(x[1])), x[0], x[1]) for x in enumerate(pg_data)], reverse=True)
+        #print(_sorted[0][0])
+        #print(sum([x[0] for x in _sorted]))
+        #print(_sorted[0][0]/sum([x[0] for x in _sorted]))
+        #print([(x[0], x[1]) for x in _sorted])
+        #if len(str(_sorted[0][2])) == 156683:
+        #    break
+        if _sorted[0][0]/sum([x[0] for x in _sorted]) < 0.5:
+            return pg_data
+        pg_data = _sorted[0][2]
+
+    #print(str(_sorted[0][2]))
+    return _sorted[0][2]
+
+
+def extract_data1(pg_data):
+    from xml.dom.minidom import parse
+    print("bbbb")
+
+    _summary = []
+    for index, item in enumerate(pg_data):
+        #rint(item)
+        print(index, len(str(item)))
+        if index == 15:
+            print(type(item))
+            for x, y in enumerate(item):
+                if x == 1:
+                    print("aaaa")
+                    #print(str(y))
+                    for w, z in enumerate(y):
+                        if x == 1:
+                            print(str(z))
+                        print(w, len(z))
+                #print(x, len(str(y)))
+
+            exit(0)
+            #with open('/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/API/Finance/PGPaniniTracker/Data/test.txt', 'w') as file:
+            #    file.write(str(item))
+            _domtree = parse('/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/API/Finance/PGPaniniTracker/Data/test.txt')
+            _group = _domtree.documentElement
+
+            from xml.etree import ElementTree as ET
+            from collections import defaultdict
+
+            xml_tree = ET.fromstring(str(item))
+            project = defaultdict(list)
+            for item in xml_tree:
+                for t in item:
+                    # here t is s tag under item. You can have multiple tags
+                    project[t.tag].append(t.text)
+
+            print(project)
+            print(dir(_group))
+            print(_group)
+            exit(0)
+    """
+    _data = []
+    #print(item)
+    #print(f"item: {item}")
+    print(f"tags: {f7(sorted(tag.name for tag in item.find_all()))}")
+    for x in f7(sorted((tag.name for tag in item.find_all()))):
+        for sub_item in item.find_all(x):
+            _data += extract_v2(x, sub_item
+    for x in ('a', 'div'):
+        _result = extract_3(x, item)
+        _data += _result if _result else [
+    #print(set(_data + extract_v3("div", item))
+    print(f8(_data))
+
+        #exit(0)
+        #print({f"attrib_{_ind}": _val for _ind, _val in enumerate(set(_data)) if _val})
+    print(_summary)
+    """
+
 def get_count(pg_data, pg_tag):
     return pg_data.count(f"<{pg_tag}")
 
@@ -331,7 +425,8 @@ def test_case(dirpath: str, filename: str):
         _pg_data, _pg_data_index = data_acquisition(os.path.join(dirpath, filename))
         print(_pg_data_index)
         for item in _pg_data_index:
-            extract_data(_pg_data[item])
+            _cleaned_data = extract_data2(_pg_data[item])
+            extract_data(_cleaned_data)
 
 
 if __name__ == "__main__":
@@ -344,6 +439,12 @@ if __name__ == "__main__":
     test_case(_pg_file_dir, "selenium.txt")
     test_case(_pg_file_dir, "selenium.txt.backup.08192021")
     test_case(_pg_file_dir, "ad8ef04b_selenium.txt")
+    #test_case(_pg_file_dir, "44b2f6f3_selenium.txt")
+    test_case(_pg_file_dir, "1d9beaeb_selenium.txt")
+    test_case(_pg_file_dir, "930587e7_selenium.txt")
+    test_case(_pg_file_dir, "def6e85e_selenium.txt")
+
+
 
     exit(0)
 
