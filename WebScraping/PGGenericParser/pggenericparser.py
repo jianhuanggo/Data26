@@ -18,6 +18,7 @@ from WebScraping import pgwebscrapingbase, pgwebscrapingcommon
 
 __version__ = "1.8"
 
+
 def remove_space_dict(pg_dict):
     return {x.replace(" ", ""): y for x, y in pg_dict.items()}
 

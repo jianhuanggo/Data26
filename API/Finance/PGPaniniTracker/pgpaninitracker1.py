@@ -237,7 +237,7 @@ class Webscraping:
         time.sleep(30)
 
     def get_content(self):
-        with open("test.html", "w") as filewriter:
+        with open("test10001.html", "w") as filewriter:
             filewriter.write(self._driver.page_source)
         #print(self._driver.page_source)
 
@@ -284,7 +284,8 @@ if __name__ == "__main__":
 if __name__ == '__main__':
     # print(xpath_transformer("//*[@id=\"appointmentType-type\"]"))
 
-    x = Webscraping("https://www.paniniamerica.net/blockchain/public-auctions/public-auctions/public-auctions.html?sortBy=end_time&p=7&sport=Football")
+    #x = Webscraping("https://www.paniniamerica.net/blockchain/public-auctions/public-auctions/public-auctions.html?sortBy=end_time&p=7&sport=Football")
+    x = Webscraping("https://opensea.io/collection/mekaverse?tab=activity")
     x.get_content()
     time.sleep(5)
     exit(0)
