@@ -21,6 +21,13 @@ from Data.Utils import pgfile
 logging.getLogger('websockets').setLevel(logging.WARNING)
 logging.getLogger('pyppeteer').setLevel(logging.WARNING)
 
+"""
+Update chromoedriver 
+1) download appropriate driver from https://chromedriver.chromium.org/downloads
+2) rename the file to /Users/jianhuang/chromedriver
+3) give permission to run:  xattr -d com.apple.quarantine /Users/jianhuang/chromedriver
+"""
+
 __version__ = "1.8"
 
 _RESULT="SUCCESS"

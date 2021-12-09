@@ -13,6 +13,15 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import NoSuchElementException
 
+
+"""
+Update chromoedriver 
+1) download appropriate driver from https://chromedriver.chromium.org/downloads
+2) rename the file to /Users/jianhuang/chromedriver
+3) give permission to run:  xattr -d com.apple.quarantine /Users/jianhuang/chromedriver
+"""
+
+
 NUMBER_OF_RETRY = 3
 SLEEP_TIME = 3
 

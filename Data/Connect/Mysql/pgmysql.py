@@ -16,8 +16,9 @@ from mysql import connector
 from mysql.connector import errorcode
 from collections import OrderedDict
 from Data.Utils import StrFunc
+from Regex import pgregex
 
-__version__ = "1.5"
+__version__ = "1.8"
 
 MYSQL_MAX_ROW_SIZE = 8126
 
@@ -234,6 +235,9 @@ class PGMysqlLiteExt(PGMysqlLite):
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
 
+    def clean_data(self, record: dict):
+        return {pgregex.parse_string("clean_column_name", [_ind])[0]: _val for _ind, _val in record.items()}
+
     def create_table(self, *, table_name, data_in):
         """
         This function will create table based on column name provided in the data
@@ -242,7 +246,18 @@ class PGMysqlLiteExt(PGMysqlLite):
         record format for data is expected:  {'columnName1': 'data1', 'columnName2': 'data2'...}
         """
         try:
+            #print("aaaaa")
+            #print(data_in)
+
+            if isinstance(data_in, list):
+                data_in = data_in[0]
+            #[self.clean_data(x) for x in pg_data]
+            #data_in
             stock_info = OrderedDict(sorted(data_in.items()))
+            #print(stock_info)
+
+            #exit(0)
+
             total_row_size: int = 0
             create_table_query = f"create table {table_name} ("
             for key, val in stock_info.items():
@@ -252,11 +267,18 @@ class PGMysqlLiteExt(PGMysqlLite):
                     create_table_query += f"{self._column_prefix}_{key} varchar({proposed_col_size})) "
                 else:
                     create_table_query += f"{self._column_prefix}_{key} varchar({proposed_col_size}),"
+            #print(create_table_query)
+
+            #exit(0)
             if total_row_size >= MYSQL_MAX_ROW_SIZE:
                 raise (
                     f"Table {table_name} rowsize {total_row_size} is larger than mysql rowsize limitation of {MYSQL_MAX_ROW_SIZE}")
             else:
                 print(f"the max row size of table {table_name} is calculated as {total_row_size}")
+
+            #print(create_table_query)
+
+            #exit(0)
             cursor = self._cnx.cursor()
 
             print(f"Creating table {table_name}...")
@@ -289,6 +311,7 @@ class PGMysqlLiteExt(PGMysqlLite):
         try:
             new_data = [StrFunc.wordtransform({f"{self._column_prefix}_{k}": v for k, v in _data.items()}) for _data in
                         data]
+
             insert_query_part1 = f"INSERT INTO {table_name} ( "
             for key, val in new_data[0].items():
                 if key == list(new_data[0].keys())[-1]:
@@ -344,23 +367,59 @@ class PGMysqlLiteExt(PGMysqlLite):
             gen_sql.append(column_name[0])
         cursor.close()
 
-    def pg_save(self, pg_table_name: str, pg_data: Union[list, dict], exception_dirpath: str = None) -> bool:
+    def pg_load_bulk(self, pg_table_name: str, pg_data: Union[list, dict], ignore_error: bool = False, exception_dirpath: str = None) -> bool:
+        try:
+            if not self.populate_data(table_name=pg_table_name, mode="bulk", data_in=pg_data):
+                if exception_dirpath:
+                    with open(exception_dirpath, 'a') as exception_file:
+                        exception_file.write(f"{pg_data}\n")
+                if ignore_error:
+                    print("ignore error is on, process next batch")
+                else:
+                    return False
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            return False
+
+        return True
+
+    def pg_load_simple(self, pg_table_name: str, pg_data: Union[list, dict], ignore_error: bool = False, exception_dirpath: str = None) -> bool:
+        try:
+            for _data_item in pg_data:
+                if not self.populate_data(table_name=pg_table_name, mode="simple", data_in=_data_item):
+                    if exception_dirpath:
+                        with open(exception_dirpath, 'a') as exception_file:
+                            exception_file.write(f"{_data_item}\n")
+                    if ignore_error:
+                        print("ignore error is on, process next record")
+                    else:
+                        return False
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            return False
+
+        return True
+    """
+    def pg_save(self, pg_table_name: str, pg_data: Union[list, dict], exception_dirpath: str = None, pg_load_mode: str = "auto") -> bool:
         # print(db_session)
         # print(f" Start insert data for ...")
         # mysql.simple_query(f"update stock_queue set status = 'WIP' where stock_symbol = '{stock_symbol}'")
 
         try:
-            _pg_mode = "bulk" if len(pg_data) > 40 else "simple"
+            if pg_load_mode == "auto":
+                pg_load_mode = "bulk" if len(pg_data) > 40 else "simple"
+
             if isinstance(pg_data, dict):
                 pg_data = list(pg_data)
-            if _pg_mode == "bulk":
-                if not self.populate_data(table_name=pg_table_name, mode=_pg_mode,
+                
+            if pg_load_mode == "bulk":
+                if not self.populate_data(table_name=pg_table_name, mode=pg_load_mode,
                                           data_in=pg_data) and exception_dirpath:
                     with open(exception_dirpath, 'a') as exception_file:
                         exception_file.write(f"{pg_data}\n")
             else:
                 for _data_item in pg_data:
-                    if not self.populate_data(table_name=pg_table_name, mode=_pg_mode, data_in=_data_item) and exception_dirpath:
+                    if not self.populate_data(table_name=pg_table_name, mode=pg_load_mode, data_in=_data_item) and exception_dirpath:
                         with open(exception_dirpath, 'a') as exception_file:
                             exception_file.write(f"{pg_data}\n")
 
@@ -370,6 +429,45 @@ class PGMysqlLiteExt(PGMysqlLite):
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return False
+
+    """
+
+
+
+    def pg_save(self, pg_table_name: str, pg_data: Union[list, dict], pg_ignore_error: bool = False, exception_dirpath: str = None,
+                pg_load_mode: str = "auto") -> bool:
+        # print(db_session)
+        # print(f" Start insert data for ...")
+        # mysql.simple_query(f"update stock_queue set status = 'WIP' where stock_symbol = '{stock_symbol}'")
+
+        try:
+            if isinstance(pg_data, list):
+                pg_data = [self.clean_data(x) for x in pg_data]
+            else:
+                pg_data = [self.clean_data(x) for x in [pg_data]]
+            if pg_load_mode == "auto":
+                pg_load_mode = "bulk" if len(pg_data) > 40 else "simple"
+
+            if isinstance(pg_data, dict):
+                pg_data = list(pg_data)
+
+            if pg_load_mode == "bulk":
+                if not self.pg_load_bulk(pg_table_name, pg_data, False, exception_dirpath):
+                    print(f"Bulk load mode failed, switch mode to simple for {pg_table_name}\n\n")
+                    if not self.pg_load_simple(pg_table_name, pg_data, pg_ignore_error, exception_dirpath):
+                        print(f"Simple load mode failed for {pg_table_name}\n\n")
+                        return False
+            elif pg_load_mode == "simple":
+                if not self.pg_load_simple(pg_table_name, pg_data, pg_ignore_error, exception_dirpath):
+                    print(f"Simple load mode failed for {pg_table_name}\n\n")
+                    return False
+
+            print(f"Data is successfully loaded to {pg_table_name}\n\n")
+            return True
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            return False
 
 
 if __name__ == '__main__':

@@ -9,6 +9,18 @@ from functools import wraps
 import contextlib
 
 
+def firstint(string: str) -> Tuple[int, str]:
+    _first_number = ""
+    for i in range(len(string)):
+        if string[i].isdigit():
+            _first_number += string[i]
+        elif _first_number != "":
+            return int(_first_number), string[i:]
+    if _first_number != "":
+        return int(_first_number), ""
+    else:
+        return None, None
+
 def pg_nested_object_print(native_object: object):
     if native_object:
         if isinstance(native_object, (tuple, list)):
