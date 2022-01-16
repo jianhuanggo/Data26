@@ -1,0 +1,14 @@
+Widget Unit cost: 12,000.56 dollars
+Taxes: 234.00 dollars
+Total: 12,234.56 dollars
+
+pattern: r"(?P<value>\d+(,\d{3})*(\.\d{2})?)\s+dollar(s)?"
+
+explanations:
+
+(?P<value>...) = name group
+\d+ = multiple digits
+(,\d{3})* = multiple 3 digits separated by comma
+(\.\d{2})? = possible one set of 2 digits representing cents (which starts with a demical) and ? = possible
+\s+ = one or more space
+dollar(s) = follow the word dollar and possible with s at the end

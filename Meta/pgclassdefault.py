@@ -115,7 +115,5 @@ class PGClassDefault:
             sys.exit(99)
 
 
-
-
 class PGDataDefault(BaseModel):
     pass

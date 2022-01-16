@@ -17,6 +17,7 @@ from mysql.connector import errorcode
 from collections import OrderedDict
 from Data.Utils import StrFunc
 from Regex import pgregex
+from Data.Utils import pgjson
 
 __version__ = "1.8"
 
@@ -432,8 +433,6 @@ class PGMysqlLiteExt(PGMysqlLite):
 
     """
 
-
-
     def pg_save(self, pg_table_name: str, pg_data: Union[list, dict], pg_ignore_error: bool = False, exception_dirpath: str = None,
                 pg_load_mode: str = "auto") -> bool:
         # print(db_session)
@@ -468,6 +467,39 @@ class PGMysqlLiteExt(PGMysqlLite):
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return False
+
+    def pg_fs_2_db(self, pg_table_name: str, pg_data_dirpath: str, pg_exception_dirpath: str):
+        """
+        Expects a directory path where a list of json files
+
+        json files are format   [
+                                {column1_name: column1_value, column2_name: column2_value...},
+                                {column1_name: column1_value, column2_name: column2_value...},
+                                {column1_name: column1_value, column2_name: column2_value...},
+                                ...
+                                ]
+        """
+        def _processed(dirpath, processed_file_list: dict = {}):
+            for file_name in pgfile.get_all_file_in_dir(dirpath):
+                n = processed_file_list.get(file_name, None)
+                if not n and file_name != "_processed._internal":
+                    #_not_processed.append(file_name)
+                    yield file_name
+        try:
+            _existing_files = pgjson.pg_deserialize_from_disk(f"{pg_data_dirpath}/_processed._internal")
+            for file_name in _processed(pg_data_dirpath, _existing_files):
+                print(file_name)
+                if self.pg_save(pg_table_name, pgjson.pg_deserialize_from_disk(f"{pg_data_dirpath}/{file_name}"), True, pg_exception_dirpath, "bulk"):
+                #if self.save_to_db("pg_panini_analysis", pgjson.pg_deserialize_from_disk(f"{dirpath}/{file_name}")):
+                    _existing_files[file_name] = "processed"
+                else:
+                    print("processed failed")
+
+            pgjson.pg_serialize_to_disk(_existing_files, f"{pg_data_dirpath}/_processed._internal")
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+        return None
 
 
 if __name__ == '__main__':
