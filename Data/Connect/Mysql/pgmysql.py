@@ -6,7 +6,7 @@ import pandas as pd
 from pprint import pprint
 import shutil
 from types import SimpleNamespace
-from typing import Union
+from typing import Union, Dict, List, Tuple
 from Data.Connect import pgdbbase
 from Meta import pgclassdefault
 from Meta import pggenericfunc

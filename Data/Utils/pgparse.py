@@ -3,7 +3,7 @@ import json
 import inspect
 from collections import abc
 from types import SimpleNamespace
-from typing import Generator
+from typing import Generator, Tuple
 from Meta import pggenericfunc
 from functools import wraps
 import contextlib
