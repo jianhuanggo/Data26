@@ -4,21 +4,15 @@ from scrapy.http import HtmlResponse
 import asyncio
 import inspect
 import logging
-from Meta import pggenericfunc
-from WebScraping import pgwebscrapingcommon, pgscrapybase
-from WebScraping import scrapyitem_pb2
+from pgmeta import pgmeta
+#from WebScraping import scrapyitem_pb2
 
 logging.getLogger('websockets').setLevel(logging.WARNING)
 logging.getLogger('pyppeteer').setLevel(logging.WARNING)
 
 
-class PGScrapyPpeteer(pgscrapybase.PGScrapyBase, pgwebscrapingcommon.PGWebScrapingCommon):
-    def __init__(self, project_name: str = "scrapyppeteer", logging_enable: str = False):
-        super(PGScrapyPpeteer, self).__init__(project_name=project_name,
-                                              object_short_name="PG_SCPY_PPET",
-                                              config_file_pathname=__file__.split('.')[0] + ".ini",
-                                              logging_enable=logging_enable,
-                                              config_file_type="ini")
+class PGScrapyPpeteer():
+    def __init__(self):
 
         ### Common Variables
         self._name = "scrapyppeteer"
@@ -67,7 +61,7 @@ class PGScrapyPpeteer(pgscrapybase.PGScrapyBase, pgwebscrapingcommon.PGWebScrapi
                                 encoding='utf-8',
                                 request=request)
         except Exception as err:
-            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            pgmeta.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return None
 
 

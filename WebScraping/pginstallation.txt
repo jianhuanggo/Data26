@@ -1,0 +1,24 @@
+pip install fake-useragent
+pip install PyYaml
+pip install pyppeteer-stealth
+pip install pyppeteer
+pip install requests-html
+pip install undetected-chromedriver
+pip install transformers
+pip install pyaes
+pip install pyAesCrypt
+pip install pydantic
+pip install scrapy
+pip install pandas
+pip install Naked
+pip install scrapy_user_agents
+"""
+[W:pyppeteer.chromium_downloader] Starting Chromium download. Download may take a few minutes.
+100%|██████████| 109M/109M [00:02<00:00, 38.1Mb/s]
+[W:pyppeteer.chromium_downloader] Chromium download done.
+[W:pyppeteer.chromium_downloader] chromium extracted to: /home/pant/.local/share/pyppeteer/local-chromium/588429
+"""
+
+export PYTHONPATH=/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/WebScraping:/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/WebScraping/pgscrapy
+
+scrapy crawl pgsiders -o test111.json

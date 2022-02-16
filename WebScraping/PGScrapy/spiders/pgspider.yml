@@ -1,0 +1,14 @@
+# content: "/Users/jianhuang/saved_data/webscaping/realtor/Johns-Creek_GA"
+start_url: "https://www.realtor.com/soldhomeprices/Johns-Creek_GA"
+
+
+
+url_list: [
+           #"https://www.paniniamerica.net/blockchain/public-auctions/sales/recent-sales.html?type=recent",
+           "https://www.paniniamerica.net/blockchain/public-auctions?sport=Basketball"
+          ]
+
+url_name: [
+           #"panini_activity",
+           "panini_auction"
+          ]

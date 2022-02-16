@@ -1,0 +1,17 @@
+Status: 200
+Content-Type: text/html; charset=utf-8
+Date: Tue, 18 Jan 2022 02:10:00 GMT
+X-Powered-By: Next.js
+Set-Cookie: split=n; Max-Age=31536000; Path=/; Expires=Wed, 18 Jan 2023 02:10:00 GMT
+split_tcv=191; Max-Age=31536000; Path=/; Expires=Wed, 18 Jan 2023 02:10:00 GMT
+__vst=cb538c58-0392-4483-9b3b-4b382e0115aa; Max-Age=630720000; Path=/; Expires=Mon, 13 Jan 2042 02:10:00 GMT
+__ssn=6d39091a-ad82-4b7f-aaf7-d112abf3e8e3; Path=/
+__ssnstarttime=1642471800; Path=/
+X-Frame-Options: DENY
+Etag: "e199b-xPI4SxMj8uKoQJMj4HszvW6OJPE"
+Vary: Accept-Encoding
+Content-Encoding: gzip
+X-Cache: Miss from cloudfront
+Via: 1.1 7cbcb3a879b5bef6ea175f5e29d026f4.cloudfront.net (CloudFront)
+X-Amz-Cf-Pop: DFW55-C2
+X-Amz-Cf-Id: 2DTkzAOxXRcdaUMhZOEISETr-yKevujhtPIb4sdPkI0PJlddzWgcZA==

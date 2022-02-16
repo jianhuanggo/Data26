@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from pyppeteer import launch
 from scrapy.http import HtmlResponse
 from pyppeteer_stealth import stealth
-from pgmeta import pgmeta
+from Meta import pggenericfunc
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator
 
 logging.getLogger('websockets').setLevel(logging.WARNING)
@@ -66,7 +66,7 @@ class PGScrapyStealth():
                                 encoding='utf-8',
                                 request=request)
         except Exception as err:
-            pgmeta.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return None
 
     # @pgoperation.pg_retry(3)

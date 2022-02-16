@@ -1,27 +1,21 @@
-import time
-import asyncio
-import logging
-import inspect
-from types import SimpleNamespace
 from pyppeteer import launch
+
 from scrapy.http import HtmlResponse
-from pyppeteer_stealth import stealth
-from pgmeta import pgmeta
-from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator
+import asyncio
+import inspect
+import logging
+from Meta import pggenericfunc
+#from WebScraping import scrapyitem_pb2
 
 logging.getLogger('websockets').setLevel(logging.WARNING)
 logging.getLogger('pyppeteer').setLevel(logging.WARNING)
 
-_RESULT="SUCCESS"
-#https://javascriptwebscrapingguy.com/avoid-being-blocked-with-puppeteer/
-#Best implementation: JavaScript
 
-
-class PGScrapyStealth():
+class PGScrapyPpeteer():
     def __init__(self):
 
         ### Common Variables
-        self._name = "scrapystealth"
+        self._name = "scrapyppeteer"
         self._data = {}
         self._pattern_match = {}
         self._parameter = {}
@@ -44,21 +38,22 @@ class PGScrapyStealth():
 
     async def _process_request(self, request, spider=None):
         try:
-            browser = await launch(headless=True)
+            options = {'headless': False}
+            browser = await launch(options)
             page = await browser.newPage()
-            page.setDefaultNavigationTimeout(0)
-
-            await stealth(page)  # <-- Here
-            response = await page.goto(request.url)
-            # await page.screenshot({"path": "realtor.png", "fullPage": True})
-            _content = await page.content()
+            response = await page.goto(
+                request.url,
+                options={
+                    'timeout': 300000,
+                }
+            )
+            content = await page.content()
             values = await page.evaluate('''() => [...document.querySelectorAll('.table')]
                                .map(element => element.getAttribute('data-options'))
                 ''')
-            body = str.encode(_content)
+            body = str.encode(content, 'utf-8')
             await page.close()
             await browser.close()
-
             return HtmlResponse(page.url,
                                 status=response.status,
                                 headers=response.headers,
@@ -66,20 +61,15 @@ class PGScrapyStealth():
                                 encoding='utf-8',
                                 request=request)
         except Exception as err:
-            pgmeta.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
         return None
-
-    # @pgoperation.pg_retry(3)
 
 
 if __name__ == '__main__':
-    test = PGScrapyStealth()
-    _url = "https://www.realtor.com/soldhomeprices/Suwanee_GA"
-    for i in range(11, 12):
-        url = f"{_url}/pg-{i}" if i >= 2 else _url
-        _request = SimpleNamespace(url=url)
-        html = asyncio.get_event_loop().run_until_complete(test.process(_request))
-        print(f"got data from {url}")
-        time.sleep(2)
-        with open(f"Suwanee-realtor-{i}.html", 'w') as file:
-            file.write(html)
+    test = PGScrapyPpeteer()
+    test._item.id = "test"
+    test.seralize_item("/Users/jianhuang/opt/anaconda3/envs/Data20/Data20/WebScraping/PGScrapyExt/PGScrapyDownloader/test.pb")
+
+    test1 = PGScrapyPpeteer()
+    test1.deseralize_item("/Users/jianhuang/opt/anaconda3/envs/Data20/Data20/WebScraping/PGScrapyExt/PGScrapyDownloader/test.pb")
+    print(test1._item.id)

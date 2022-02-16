@@ -10,8 +10,13 @@ from pydantic.generics import GenericModel
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator, Generic, TypeVar, Optional, List, Dict
 from pgmeta.pggenericfunc import check_args
 from pgmeta import pgclassdefault, pggenericfunc
+<<<<<<< HEAD
 from pgutils import pgregex
-from pgscrapyext.pgscrapyformatter import pgscrapyformatterbase, pgscrapyformattercommon
+import pgscrapyformatterbase, pgscrapyformattercommon
+=======
+from pgscrapy.pgscrapyext.pgscrapyformatter import pgscrapyformatterbase, pgscrapyformattercommon
+#import pgscrapyformatterbase, pgscrapyformattercommon
+>>>>>>> 8c9bb57df8f084841579588cbf2458dcd7838569
 
 __version__ = "1.8"
 
@@ -50,28 +55,19 @@ def pg_custom_paniniamerica_checker():
     return {"(\$ [0-9]+(\.[0-9]*)?)": 6}
 
 
-# def pg_custom_paniniamerica_activity_data_formatter(pg_record: List):
-#     return {list(pg_record[0].values())[0]: f"{list(pg_record[1].values())[0]}:{list(pg_record[2].values())[0]}:{list(pg_record[2].values())[0]}:{list(pg_record[3].values())[0]}",
-#             'player_name': list(pg_record[5].values())[0],
-#             'serial_num': list(pg_record[6].values())[0],
-#             'card_set': list(pg_record[7].values())[0],
-#             list(pg_record[8].values())[0]: list(pg_record[9].values())[0],
-#             list(pg_record[10].values())[0]: list(pg_record[11].values())[0],
-#             list(pg_record[12].keys())[0]: list(pg_record[12].values())[0]}
+def pg_custom_paniniamerica_formatter(pg_record: List):
+    return {list(pg_record[0].values())[0]: f"{list(pg_record[1].values())[0]}:{list(pg_record[2].values())[0]}:{list(pg_record[2].values())[0]}:{list(pg_record[3].values())[0]}",
+            'player_name': list(pg_record[5].values())[0],
+            'serial_num': list(pg_record[6].values())[0],
+            'card_set': list(pg_record[7].values())[0],
+            list(pg_record[8].values())[0]: list(pg_record[9].values())[0],
+            list(pg_record[10].values())[0]: list(pg_record[11].values())[0],
+            list(pg_record[12].keys())[0]: list(pg_record[12].values())[0]}
 
 
-def pg_custom_paniniamerica_activity_header_formatter(pg_record: List, pg_header: List = None):
+def pg_custom_paniniamerica_recent_sales_formatter(pg_record: List, pg_header: List = None):
     pg_header = ["image_url", "player_name", "serial_number", "price", "card_set", "buyer_name", "seller_name", "date_time"] if not pg_header else pg_header
     return {x[0]: list(x[1].values())[0] for x in zip(pg_header, pg_record)}
-
-
-
-def pg_custom_paniniamerica_auction_header(pg_record: List, pg_header: List = None):
-    _exclude_list = []
-    pg_header = ["link", "end_in", "day", "hour", "minute", "second", "icon", "image_url", "player_name", "serial_number",
-                 "card_set", "current_bid_text", "current_bid", "buy_now_text", "buy_now", "crypto_icon",
-                 "rarity"] if not pg_header else pg_header
-    return {x[0]: list(x[1].values())[0] for x in zip(pg_header, pg_record) if x[0] not in _exclude_list}
 
     #for item in pg_record:
     #    print(item)
@@ -102,7 +98,6 @@ def pg_default_formatter(pg_record: List):
     return _formatted_content
 
 
-
 class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgscrapyformattercommon.PGScrapingFormatterCommon):
     def __init__(self, project_name: str = "scrapingformatter", logging_enable: str = False):
         super(PGWebScrapingFormatter, self).__init__(project_name=project_name,
@@ -117,10 +112,6 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
 
         ### Specific Variables
         self._data_inputs = {}
-        self._data_validator = {"panini_activity": pg_custom_paniniamerica_checker,
-                                "panini_auction": pg_custom_paniniamerica_checker}
-        self._header_formatter = {"panini_activity": pg_custom_paniniamerica_activity_header_formatter,
-                                  "panini_auction": pg_custom_paniniamerica_auction_header}
 
 
     @property
@@ -131,8 +122,7 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
     def data(self):
         return self._data
 
-
-
+<<<<<<< HEAD
     # def pg_data_acquisition(self, filepath: str, custom_validate=None, top_data_num: int = 10):
     #     """
     #     mode for beautifulsoup: html.parser, html5lib
@@ -216,6 +206,9 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
     def pg_data_acquisition(self, filepath: str,
                             custom_validate=None,
                             top_data_num: int = 1):
+=======
+    def pg_data_acquisition(self, filepath: str, custom_validate=None, top_data_num: int = 10):
+>>>>>>> 8c9bb57df8f084841579588cbf2458dcd7838569
         """
         mode for beautifulsoup: html.parser, html5lib
 
@@ -303,62 +296,6 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
             return _find_num_record(_entire_finding, custom_validate())
             #return _entire_finding, _find_num_record(_entire_finding)
 
-
-
-    def pg_scrapy_acquisition(self, pg_content, custom_validate=None, top_data_num: int = 1):
-        """
-        mode for beautifulsoup: html.parser, html5lib
-
-        Other ideas:
-            Get 5 layers deep
-            Use bs4.element.Comment
-        """
-
-        def _default_validate(pg_data_content: bs4.element.Tag):
-            return False if not pg_data_content.text else True
-
-        def _find_num_record(pg_data_content: Union[bs4.element.Tag, bs4.element.ResultSet],
-                             validation_dict: Dict = None, top_data_num: int = 1):
-            _cache = collections.defaultdict(tuple)
-
-            def _validate_content(pg_content: str) -> bool:
-                #print(validation_dict)
-                if not validation_dict: return True
-                for index, validation in validation_dict.items():
-                    if pgregex.pg_count_overlapping(index, pg_content) < validation:
-                        return False
-                return True
-
-            def _extract_stats(pg_element: bs4.element.Tag, level):
-                _type = {"<class 'bs4.element.Tag'>": "tag",
-                         "<'bs4.element.NavigableString'>": "navstring",
-                         "<'bs4.element.Comment'>": "comment"
-                         }
-                if isinstance(pg_element, bs4.element.ResultSet):
-                    for it in pg_element:
-                        _cache[it] = (len(it), level + 1, _type.get(str(type(it)), "default"), it)
-                        _extract_stats(it, level + 1)
-                elif not isinstance(pg_element, (bs4.element.Comment, bs4.element.NavigableString)):
-                    for it in pg_element.children:
-                        _cache[it] = (len(it), level + 1, _type.get(str(type(it)), "default"), it)
-                        _extract_stats(it, level + 1)
-
-            _extract_stats(pg_data_content, 0)
-            _cache_tag = sorted([x for x in _cache.values() if x[2] == "tag"], key=lambda x: x[0])
-
-            _parsed_content = []
-            for i in range(len(_cache_tag) - 1, -1, -1):
-                if _validate_content(str(_cache_tag[i][3])):
-                    _parsed_content.append((i, _cache_tag[i][3]))
-
-            _sorted_parsed_content = sorted(_parsed_content, key=lambda x: len(str(x[1])) // len(x[1]))
-            print([x[0] for x in _sorted_parsed_content])
-
-            return [_sorted_parsed_content[0][1]]
-
-        return _find_num_record(pg_content, custom_validate())
-
-
     def pg_extract_data(self, pg_data, custom_parser=None):
         custom_parser = pg_default_formatter if custom_parser is None else custom_parser
         def _get_label(soup_tag: bs4.element.Tag):
@@ -424,96 +361,7 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
                     _traverse(None, item)
                     #print(_result[_record_index])
                     _result[_record_index] = custom_parser(_result[_record_index])
-        return _result
-
-    def pg_extract_data1(self, pg_data, custom_parser=None):
-        custom_parser = pg_default_formatter if custom_parser is None else custom_parser
-        def _get_label(soup_tag: bs4.element.Tag):
-            #print(f"this is the soup_tag:    --------->  {soup_tag}")
-
-            #print(f"inside of _get_label: {soup_tag}")
-            # print(soup_tag['src'])
-            # print(soup_tag['alt'])
-            """
-            check for image urls
-            """
-
-            if isinstance(soup_tag, (int, tuple, list, str, dict)):
-                return {f"pg_generic_{type(soup_tag)}": soup_tag}
-
-            # if soup_tag.children:
-            #     print("true")
-            # else:
-            #     print("false")
-
-            if soup_tag.has_attr('src'):
-                if soup_tag.has_attr('alt'):
-                    return {soup_tag['alt'].replace(" ", "_"): soup_tag['src']}
-                else:
-                    return {f"image_url": soup_tag['src']}
-            """
-            check for links
-            """
-            if soup_tag.has_attr('href'):
-                print(soup_tag['href'])
-                return {f"links": soup_tag['href']}
-
-            # exit(0)
-            # print(soup_tag.text, type(soup_tag.text))
-
-            if isinstance(soup_tag.text, list):
-                _text = ' '.join(soup_tag.text)
-            else:
-                _text = soup_tag.text
-            if soup_tag.has_attr('class') and soup_tag['class']:
-                return {soup_tag['class'][0]: _text.replace("\n", " ").replace("\t", " ")}
-            else:
-                return {f"pg_generic_{type(_text)}": _text.replace("\n", " ").replace("\t", " ")}
-
-        def _traverse(prev, current):
-            nonlocal _record_index
-            # if prev is None:
-            #     print(f" in _traverse, the current ............{current} and type ......... {type(current)}")
-            if isinstance(current, (int, str)):
-                _result[_record_index].append(_get_label(current))
-            elif isinstance(current, (bs4.element.Comment, bs4.element.NavigableString)):
-                # _result[_record_index].append(prev)
-                _result[_record_index].append(_get_label(prev))
-            elif current and isinstance(current, bs4.element.Tag) and (not current.children or not list(current.children)):
-                # _result[_record_index].append(current)
-                #print(f"inside _travese111: {current}")
-                _result[_record_index].append(_get_label(current))
-            # elif current.children and not list(current.children):
-            #     _result[_record_index].append(_get_label(current))
-            else:
-                #if not isinstance(current, (bs4.element.NavigableString)):
-                #print(f"current: {current} {list(current.children)}")
-                # if prev is None:
-                #     print(f" in _traverse, the current ............{list(current.children)} and type ......... {type(current.children)}")
-                if isinstance(current, bs4.element.Tag) and current.has_attr('href'):
-                    _result[_record_index].append(_get_label(current))
-                for it in current.children:
-                    # if prev is None:
-                    #     print(f" in _traverse, the current xxxxxxxxxxxx{it} and number of children {len(it)} and type xxxxxxxxx {type(it)}")
-                    #     print(f" in _traverse, the current ............{list(it.children)} and type ......... {type(it)}")
-                    #print(f"inside _travese: {it} and type is {type(it)}")
-                    _traverse(current, it)
-
-        _result = collections.defaultdict(list)
-        print(f"total records in pg_data: {len(pg_data)}")
-
-        for data_item in pg_data:
-            for _record_index, item in enumerate(data_item):
-                #print(item)
-                if not isinstance(item, (bs4.element.Comment, bs4.element.NavigableString)):
-                    # print(type(item))
-                    #print(list(item.children)[0])
-                    #print(f"this is the item <---------  {item}")
-                    _traverse(None, item)
-                    #print(f"aaaaaa{_result[_record_index]}bbbbbbb")
-                    #print(_result[_record_index])
-                    _result[_record_index] = custom_parser(_result[_record_index])
-        return _result
+        pprint(_result)
 
     def test_case(self, dirpath: str, filename: str, custom_record_validate=None, custom_header=None):
         Path(os.path.join(dirpath, filename))
@@ -527,20 +375,16 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
 
             #self.pg_extract_data(_pg_data_content, pg_custom_paniniamerica_recent_sales_formatter)
 
-            return self.pg_extract_data(_pg_data_content, custom_header)
+<<<<<<< HEAD
+            self.pg_extract_data(_pg_data_content, custom_header)
+=======
+            print(_pg_data_index)
+            print(_pg_data_content[_pg_data_index[0]])
+            print(_pg_data_content[_pg_data_index[6]])
 
-    def scrapy_run(self, pg_content, custom_data_validator: str = None, custom_header_formatter: str =None):
-
-            # _pg_data_content = self.pg_scrapy_acquisition(pg_content, custom_record_validate)
-            # return self.pg_extract_data(_pg_data_content, custom_header)
-        print(f"formatter is {custom_data_validator} <--> {custom_header_formatter}")
-        _pg_data_content = self.pg_scrapy_acquisition(pg_content, self._data_validator.get(custom_data_validator))
-        print("testingtestingtestingtestingtestingtesting")
-        #print(_pg_data_content)
-        print("testingtestingtestingtestingtestingtesting")
-        return self.pg_extract_data1(_pg_data_content, self._header_formatter.get(custom_header_formatter))
-        # _pg_data_content = self.pg_scrapy_acquisition(pg_content, pg_custom_paniniamerica_checker)
-        # return self.pg_extract_data(_pg_data_content, pg_custom_paniniamerica_activity_header_formatter)
+            #self.pg_extract_data(_pg_data_content[_pg_data_index[6]], pg_custom_paniniamerica_formatter)
+            self.pg_extract_data(_pg_data_content[_pg_data_index[6]])
+>>>>>>> 8c9bb57df8f084841579588cbf2458dcd7838569
 
     def get_tasks(self, pgdataset: Union[pd.DataFrame, dict, str], parameters: dict = None) -> bool:
 
@@ -634,9 +478,13 @@ class PGWebScrapingFormatterSingleton(PGWebScrapingFormatter):
 
 if __name__ == '__main__':
     test = PGWebScrapingFormatter()
-    _pg_file_dir = "/home/pant/anaconda3/envs/webscraping/pgweb1/Data/"
+    _pg_file_dir = "/Users/jianhuang/opt/anaconda3/envs/pgwebscraping/pgweb1/Data/"
+<<<<<<< HEAD
     test.test_case(_pg_file_dir, "test31.html", pg_custom_paniniamerica_checker, pg_custom_paniniamerica_recent_sales_formatter)
     #test.test_case(_pg_file_dir, "test42.html", pg_custom_opensea_sandbox_checker)
+=======
+    test.run(_pg_file_dir, "test30.html")
+>>>>>>> 8c9bb57df8f084841579588cbf2458dcd7838569
 
     exit(0)
     test.set_profile("cloud_storage")
