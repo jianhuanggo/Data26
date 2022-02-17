@@ -3,9 +3,10 @@ import inspect
 import joblib
 import pandas as pd
 from typing import Callable, Iterator, TypeVar, Optional, Type, Union, List, AnyStr, Any, Dict
-from pgmeta import pggenericfunc, pgclassdefault
-from pgmeta.pggenericfunc import check_args
-from pgutils import pgoperation, pgfile
+from Meta import pggenericfunc, pgclassdefault
+from Meta.pggenericfunc import  check_args
+#from pgutils import pgoperation, pgfile
+from Data.Utils import pgoperation, pgfile
 
 __version__ = "1.8"
 

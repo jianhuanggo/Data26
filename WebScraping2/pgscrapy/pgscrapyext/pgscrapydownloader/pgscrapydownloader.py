@@ -11,8 +11,9 @@ from Naked.toolshed.shell import execute_js
 from bs4 import BeautifulSoup
 from pydantic.generics import GenericModel
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator, Generic, TypeVar, Optional, List, Dict, AnyStr
-from pgmeta.pggenericfunc import check_args
-from pgmeta import pgclassdefault, pggenericfunc, pgmeta
+#from pgmeta import pgclassdefault, pggenericfunc, pgmeta
+from Meta import pgclassdefault, pggenericfunc
+from Meta.pggenericfunc import check_args
 from pgscrapyext.pgscrapydownloader import pgscrapydownloaderbase, pgscrapydownloadercommon
 #import pgscrapydownloaderbase, pgscrapydownloadercommon
 
@@ -98,7 +99,7 @@ class PGWebScrapingDownloader(pgscrapydownloaderbase.PGWebScrapingDownloaderBase
                                         request=request)
 
         except Exception as err:
-            pgmeta.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
 
 
     def get_tasks(self, pgdataset: Union[pd.DataFrame, dict, str], parameters: dict = None) -> bool:

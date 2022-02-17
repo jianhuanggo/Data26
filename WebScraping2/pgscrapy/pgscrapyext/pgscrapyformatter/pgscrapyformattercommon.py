@@ -4,9 +4,12 @@ import joblib
 import tarfile
 import pandas as pd
 from typing import Callable, Iterator, TypeVar, Optional, Type, Union
-from pgmeta import pggenericfunc, pgclassdefault
-from pgmeta.pggenericfunc import check_args
-from pgutils import pgoperation, pgfile
+# from pgmeta import pggenericfunc, pgclassdefault
+# from pgmeta.pggenericfunc import check_args
+# from pgutils import pgoperation, pgfile
+from Meta import pggenericfunc, pgclassdefault
+from Meta.pggenericfunc import  check_args
+from Data.Utils import pgoperation, pgfile
 
 
 class PGScrapingFormatterCommon(pgclassdefault.PGClassDefault):

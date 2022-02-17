@@ -12,6 +12,7 @@ pip install scrapy
 pip install pandas
 pip install Naked
 pip install scrapy_user_agents
+pip install boto3
 """
 [W:pyppeteer.chromium_downloader] Starting Chromium download. Download may take a few minutes.
 100%|██████████| 109M/109M [00:02<00:00, 38.1Mb/s]

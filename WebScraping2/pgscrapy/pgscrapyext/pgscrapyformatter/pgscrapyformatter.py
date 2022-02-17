@@ -8,9 +8,12 @@ import pandas as pd
 from bs4 import BeautifulSoup
 from pydantic.generics import GenericModel
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator, Generic, TypeVar, Optional, List, Dict
-from pgmeta.pggenericfunc import check_args
-from pgmeta import pgclassdefault, pggenericfunc
-from pgutils import pgregex
+# from pgmeta.pggenericfunc import check_args
+# from pgmeta import pgclassdefault, pggenericfunc
+from Meta.pggenericfunc import check_args
+from Meta import pgclassdefault, pggenericfunc
+from Data.Utils import pgregex
+#from pgutils import pgregex
 from pgscrapyext.pgscrapyformatter import pgscrapyformatterbase, pgscrapyformattercommon
 
 __version__ = "1.8"

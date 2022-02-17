@@ -22,8 +22,8 @@ from pgscrapyext.pgscrapydownloader import pgscrapydownloader
 from pgscrapyext.pgscrapyformatter import pgscrapyformatter
 # from pgscrapyext.pgscrapyformatter.pgscrapyformatter import pg_custom_paniniamerica_checker, \
 #     pg_custom_paniniamerica_recent_sales_formatter, pg_custom_paniniamerica_activity_header, pg_custom_paniniamerica_activity_formatter
-
-from pgmeta import pgmeta
+from Meta import pggenericfunc
+#from pgmeta import pgmeta
 
 logging.getLogger('websockets').setLevel(logging.WARNING)
 logging.getLogger('pyppeteer').setLevel(logging.WARNING)
@@ -39,7 +39,7 @@ class PyppeteerDownloaderMiddleware:
         try:
             return self.loop.run_until_complete(pgpyppeteer.PGScrapyPpeteer().process(request, spider))
         except Exception as err:
-            pgmeta.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return None
 
 
@@ -118,7 +118,7 @@ class PgWebScrapingJSDownloaderMiddleware:
                 #return self.loop.run_until_complete(pgstealth.PGScrapyStealth().process(request, spider))
 
         except Exception as err:
-            pgmeta.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
+            pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
             return None
 
     #def process_response(self, response, spider):
