@@ -1,0 +1,26 @@
+export PYTHONPATH=/Users/jianhuang/opt/anaconda3/envs/Data35/Data26
+
+pip install sqlalchemy
+pip install python-daemon
+pip install mysql-connector-python
+pip install psycopg2-binary
+
+
+export DAEMON_META_HOST=127.0.0.1
+export DAEMON_META_USERNAME=postgres
+export DAEMON_META_PASS=daemonmeta
+export DAEMON_META_PORT=5432
+export DAEMON_META_DB=metaschema
+
+
+
+
+
+python start_daemon.py -y worker -n 1 startup
+python start_daemon.py -y worker -n 1 shutdown
+python start_daemon.py -y worker -n 5 startup
+python start_daemon.py -y worker -n 5 shutdown
+python start_daemon.py -y jobdispatcher -n 1 startup
+python start_daemon.py -y jobdispatcher -n 1 shutdown
+python start_daemon.py -y worker -n 50 startup
+python start_daemon.py -y worker -n 50 shutdown

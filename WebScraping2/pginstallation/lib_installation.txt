@@ -13,6 +13,7 @@ pip install pandas
 pip install Naked
 pip install scrapy_user_agents
 pip install boto3
+
 """
 [W:pyppeteer.chromium_downloader] Starting Chromium download. Download may take a few minutes.
 100%|██████████| 109M/109M [00:02<00:00, 38.1Mb/s]
@@ -22,3 +23,11 @@ pip install boto3
 
 
 export PYTHONPATH=/Users/jianhuang/opt/anaconda3/envs/Data26/Data26:/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/WebScraping2:/Users/jianhuang/opt/anaconda3/envs/Data26/Data26/WebScraping2/pgscrapy
+
+
+export PYTHONPATH=/Users/jianhuang/opt/anaconda3/envs/Data35/Data26:/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2:/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy
+
+
+cd /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy
+
+scrapy crawl pgsiders -o test111.json

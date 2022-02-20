@@ -217,6 +217,37 @@ class worker(pgdaemontypebase.PGDaemonBase):
             self.args.logger.info(f"This task is completed: Nothing to process")
 
 
+# def job_type_system(current_task, *args, **kwargs):
+#     loadConf = []
+#     logger = args[1]
+#     logger.info(args[0])
+#
+#     #logger.info(args)
+#     if "PYTHONPATH" not in os.environ and "PYTHONPATH" in args[2]:
+#         os.environ['PYTHONPATH'] = args[2]['PYTHONPATH']
+#
+#     loadConf.append(current_task.job_command)
+#     try:
+#         for argument in current_task.job_argument.strip().split():
+#             loadConf.append(argument)
+#     except Exception as err:
+#         logger.critical(err)
+#
+#     logger.info(loadConf)
+#
+#
+#     #loadConf = ['python', 'pgdaemon.py', "-i", str(daemon_id), "-t", "60", "-y", daemon_type, "start"]
+#     # print(loadConf)
+#     #self.args.logger.debug(loadConf)
+#
+#     p2 = subprocess.Popen(loadConf)
+#     p2.wait()
+#     if p2.returncode != 0:
+#         return False
+#     time.sleep(2)
+#     logger.info("ending debugging!!!!!!!")
+#     return True
+
 def job_type_system(current_task, *args, **kwargs):
     loadConf = []
     logger = args[1]
@@ -240,14 +271,17 @@ def job_type_system(current_task, *args, **kwargs):
     # print(loadConf)
     #self.args.logger.debug(loadConf)
 
-    p2 = subprocess.Popen(loadConf)
+    logger.info(current_task.system_parameter)
+    if current_task.system_parameter:
+        p2 = subprocess.Popen(loadConf, cwd=current_task.system_parameter)
+    else:
+        p2 = subprocess.Popen(loadConf)
     p2.wait()
     if p2.returncode != 0:
         return False
     time.sleep(2)
     logger.info("ending debugging!!!!!!!")
     return True
-
 
 def job_type_native(current_task, *args, **kwargs):
     if False:

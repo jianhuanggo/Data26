@@ -85,6 +85,11 @@ def main_routine(args):
     #args.conf = pgconfig.Config()
     args.conf = dnconf.DNConf()
 
+    #/Users/jianhuang/opt/anaconda3/envs/Data35/Data26:/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2:/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy
+    # sys.path.append('/Users/jianhuang/opt/anaconda3/envs/Data35/Data26')
+    # sys.path.append('/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2')
+    # sys.path.append('/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy')
+
     while True:
         try:
             args.logger.info("Retrieving table current info:")
