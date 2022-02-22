@@ -6,7 +6,7 @@
 # #process.crawl(PGScrapy, arg1=val1, arg2=val2)
 # process.crawl(PGScrapy)
 # process.start()
-
+import collections
 
 from twisted.internet import reactor
 from scrapy.crawler import Crawler
@@ -20,14 +20,18 @@ from Meta import pggenericfunc
 from scrapy.utils.project import get_project_settings
 from pgscrapy.spiders.pgspider import PGScrapy
 from scrapy.crawler import CrawlerProcess
-from Data.Utils import pgfile
-from Data.Utils import pgdirectory
+from Data.Utils import pgfile, pgdirectory, pgyaml
 
 _version_ = 0.1
 
 
+def _get_config():
+    return pgyaml.yaml_load(yaml_filename=__file__.split('.')[0] + ".yml")
+
+
 def _command_line():
     try:
+        _config = _get_config()
         argparser = argparse.ArgumentParser(description='pgspider command line')
         argparser.add_argument('-v', '--version', action='version', version='%(prog)s VERSION ' + str(_version_),
                                help='show current version')
@@ -39,9 +43,9 @@ def _command_line():
                                help='pgsider default output file format')
         argparser.add_argument('-l', '--log_file', action='store', type=str, dest='pg_log_filename', default="auto",
                                help='pgsider default log file')
-        argparser.add_argument('-d', '--data_dir', action='store', type=str, dest='pg_data_dir', default="/Users/jianhuang/opt/anaconda3/envs/pg_data/panini",
+        argparser.add_argument('-d', '--data_dir', action='store', type=str, dest='pg_data_dir', default=_config.get("data_dir", ""),
                                help='pgsider default data directory')
-        argparser.add_argument('-e', '--log_dir', action='store', type=str, dest='pg_log_dir', default="/Users/jianhuang/opt/anaconda3/envs/pg_logs/panini",
+        argparser.add_argument('-e', '--log_dir', action='store', type=str, dest='pg_log_dir', default=_config.get("log_dir", ""),
                                help='pgsider default log directory')
         # argparser.add_argument('-y', '--worker_type', action='store', choices=['worker',
         #                                                                        'watcher',

@@ -116,10 +116,8 @@ class PGScrapy(scrapy.Spider):
             #_req.dirpath = "/home/pant/anaconda3/envs/pgscrapydownloader_1/data"
             #_req.filename = f"{pgfile.get_random_filename('job')}.html"
 
-
-
-            _req.dirpath = "/Users/jianhuang/opt/anaconda3/envs/pgwebscraping/pgweb1/Data"
-            _req.filename = "test30.html"
+            _req.dirpath = self._config["parameters"].get("downloader_intermediate_dir", "")
+            _req.filename = f"{pgfile.get_random_filename('pgdownloader')}.html"
 
             _req.pageitem = _metadata.get(url_item[1])
             _req.pagetag = url_item[1]

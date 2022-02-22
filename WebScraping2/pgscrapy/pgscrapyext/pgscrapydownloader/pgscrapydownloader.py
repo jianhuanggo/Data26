@@ -72,17 +72,19 @@ class PGWebScrapingDownloader(pgscrapydownloaderbase.PGWebScrapingDownloaderBase
                 print("failed to acquire data")
 
     def run_scrapy(self, request, dirpath: str, filename: str):
+
         Path(os.path.join(dirpath, filename))
         #_argument = f"{request.url} /home/pant/anaconda3/envs/pgscrapydownloader_1/data/test51.html"
         _argument = f"{request.url} {os.path.join(dirpath, filename)}"
-        
+        #print(_argument)
+
         try:
             if Path.exists:
-                #if success := execute_js(file_path="/home/pant/anaconda3/envs/pgscrapydownloader_1/pgscrapedownloadertest.js", arguments=_argument):
-                if True:
+                if success := execute_js(file_path=os.path.join(self._config.parameters['config_file']['default']['downloader_binary'], "pgscrapedownloadertest.js"), arguments=_argument):
+                #if True:
                     print("successfully acquired the data ")
                     with open(os.path.join(dirpath, filename)) as file:
-                        return HtmlResponse(url="http://ok",
+                        return HtmlResponse(url=request.url,
                                             status=200,
                                             headers=None,
                                             body=file.read().encode("utf-8"),
@@ -91,7 +93,7 @@ class PGWebScrapingDownloader(pgscrapydownloaderbase.PGWebScrapingDownloaderBase
 
                 else:
                     print("failed to acquire data")
-                    return HtmlResponse(url="http://ok",
+                    return HtmlResponse(url=request.url,
                                         status=404,
                                         headers=None,
                                         body="failed to acquire data".encode("utf-8"),
@@ -100,7 +102,7 @@ class PGWebScrapingDownloader(pgscrapydownloaderbase.PGWebScrapingDownloaderBase
 
         except Exception as err:
             pggenericfunc.pg_error_logger(self._logger, inspect.currentframe().f_code.co_name, err)
-
+        exit(0)
 
     def get_tasks(self, pgdataset: Union[pd.DataFrame, dict, str], parameters: dict = None) -> bool:
         check_args(inspect.currentframe().f_code.co_name,
