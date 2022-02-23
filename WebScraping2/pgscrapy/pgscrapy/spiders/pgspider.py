@@ -76,7 +76,13 @@ class PGScrapy(scrapy.Spider):
     def __init__(self, *args, **kwargs):
         super(PGScrapy, self).__init__(PGScrapy.name, **kwargs)
         self._config = {}
-        self._switch = None
+        # self._switch = None
+        if kwargs:
+            self._pg_arguments = kwargs
+        else:
+            self._pg_arguments = None
+        print(f"arguments: {self._pg_arguments}")
+
 
     #download_delay = 5.0
     # start_urls = ['https://www.realtor.com/soldhomeprices/Johns-Creek_GA']
@@ -106,9 +112,12 @@ class PGScrapy(scrapy.Spider):
         # exit(0)
         _metadata = {"panini_activity": PgscrapyPastActivityItem,
                      "panini_auction": PgscrapyAuctions}
-        self._config['parameters'] = pgyaml.yaml_load(yaml_filename=__file__.split('.')[0] + ".yml")
-        self._switch = self._config['parameters'].get('content', 'None')
-        print(self._switch)
+        if self._pg_arguments and self._pg_arguments["input_yaml_file"]:
+            self._config['parameters'] = pgyaml.yaml_load(yaml_filename=self._pg_arguments["input_yaml_file"])
+        else:
+            self._config['parameters'] = pgyaml.yaml_load(yaml_filename=__file__.split('.')[0] + ".yml")
+        # self._switch = self._config['parameters'].get('content', 'None')
+        # print(self._switch)
 
         for url_item in zip(self._config['parameters'].get('url_list', 'None'), self._config['parameters'].get('url_name', 'None')):
             #print(url_item)

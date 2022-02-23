@@ -6,6 +6,10 @@ import os
 import shutil
 
 
+def is_non_zero_file(fpath):
+    return os.path.isfile(fpath) and os.path.getsize(fpath) > 0
+
+
 def create_temp_file(size, file_name, file_content):
     random_file_name = '_'.join([str(uuid.uuid4().hex[:6]), file_name])
     with open(random_file_name, 'w') as f:

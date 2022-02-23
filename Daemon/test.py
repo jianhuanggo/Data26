@@ -36,6 +36,6 @@ def job_type_system(current_task, *args, **kwargs):
 if __name__ == "__main__":
     a = SimpleNamespace()
     a.job_command = "python"
-    a.job_argument = '/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgspiderrun.py'
-    a.cwd = "/Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy"
+    a.job_argument = '/data/mydata/envs/Data35/Data26/WebScraping2/pgscrapy/pgspiderrun2.py -i /data/mydata/envs/Data35/Data26/WebScraping2/pgscrapy/pgscrapy/pg_spider_request/panini_public_activity.yml -d /data/mydata/pg_data/panini/activity'
+    a.cwd = "/data/mydata/envs/Data35/Data26/WebScraping2/pgscrapy"
     job_type_system(a)

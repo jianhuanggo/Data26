@@ -1,0 +1,11 @@
+downloader_intermediate_dir: "/data/mydata/pg_data/panini/intermediate"
+
+
+
+url_list: [
+           "https://www.paniniamerica.net/blockchain/blockchain-sales.html?sale_type=recent"
+          ]
+
+url_name: [
+           "panini_activity"
+          ]

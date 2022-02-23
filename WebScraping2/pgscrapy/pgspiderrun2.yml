@@ -1,0 +1,3 @@
+log_dir: "/data/mydata/pg_logs/panini"
+
+data_dir: "/data/mydata/pg_data/panini"
