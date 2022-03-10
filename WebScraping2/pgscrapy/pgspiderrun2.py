@@ -94,6 +94,14 @@ def run():
         # print(_pgspider_setting['FEED_URI'])
         # print(_pgspider_setting['LOG_FILE'])
 
+        print(_pgspider_setting['FEED_FORMAT'])
+        print(_pgspider_setting['FEED_URI'])
+        print(_pgspider_setting['LOG_FILE'])
+        print(args.pg_input_filepath)
+
+        # raise SystemExit("hello.....")
+
+
         process = CrawlerProcess(_pgspider_setting)
         process.crawl(PGScrapy, input_yaml_file=args.pg_input_filepath)
         process.start()

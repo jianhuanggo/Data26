@@ -9,6 +9,12 @@ from functools import wraps
 import contextlib
 
 
+def web_escaping(string: str) -> str:
+    return string.translate(str.maketrans({"&": r"\&"
+                                           }))
+
+
+
 def firstint(string: str) -> Tuple[int, str]:
     _first_number = ""
     for i in range(len(string)):

@@ -12,6 +12,7 @@ from bs4 import BeautifulSoup
 from pydantic.generics import GenericModel
 from typing import Callable, Union, Any, TypeVar, Tuple, Iterable, Generator, Generic, TypeVar, Optional, List, Dict, AnyStr
 #from pgmeta import pgclassdefault, pggenericfunc, pgmeta
+from Data.Utils import pgparse, pgdirectory
 from Meta import pgclassdefault, pggenericfunc
 from Meta.pggenericfunc import check_args
 from pgscrapyext.pgscrapydownloader import pgscrapydownloaderbase, pgscrapydownloadercommon
@@ -71,25 +72,102 @@ class PGWebScrapingDownloader(pgscrapydownloaderbase.PGWebScrapingDownloaderBase
             else:
                 print("failed to acquire data")
 
-    def run_scrapy(self, request, dirpath: str, filename: str):
+    def run_scrapy(self, request):
 
-        Path(os.path.join(dirpath, filename))
+        #Path(os.path.join(dirpath, filename))
         #_argument = f"{request.url} /home/pant/anaconda3/envs/pgscrapydownloader_1/data/test51.html"
-        _argument = f"{request.url} {os.path.join(dirpath, filename)}"
-        #print(_argument)
+
+        _url = pgparse.web_escaping(str(request.url)) if hasattr(request, "url") else None
+        _downloader_intermediate_dir = pgparse.web_escaping(str(request.downloader_intermediate_dir)) if hasattr(request, "downloader_intermediate_dir") else None
+        _url_entity = pgparse.web_escaping(str(request.url_entity)) if hasattr(request, "url_entity") else None
+        _url_function = pgparse.web_escaping(str(request.url_function)) if hasattr(request, "url_function") else None
+        _url_start_page = pgparse.web_escaping(str(request.url_start_page)) if hasattr(request, "url_start_page") else None
+        _url_end_page = pgparse.web_escaping(str(request.url_end_page)) if hasattr(request, "url_end_page") else None
+        _dirpath = pgparse.web_escaping(str(request.dirpath)) if hasattr(request, "dirpath") else None
+        _filename = pgparse.web_escaping(str(request.filename)) if hasattr(request, "filename") else None
+
+        _url_testest = pgparse.web_escaping(str(request._url_testest)) if hasattr(request, "_url_testest") else None
+
+        print(_url_testest)
+
+        #raise SystemExit("Test here!!!!!!")
+
+        if request.pg_url_parse_type == "page":
+            print(_url)
+            print(_downloader_intermediate_dir)
+            print(_url_entity)
+            print(_url_function)
+            print(_url_start_page)
+            print(_url_end_page)
+
+            # _url = pgparse.web_escaping(str(request.url))
+            # _downloader_intermediate_dir = pgparse.web_escaping(str(request.downloader_intermediate_dir))
+            # _url_entity = pgparse.web_escaping(str(request.url_entity))
+            # _url_function = pgparse.web_escaping(str(request.url_function))
+            # _url_start_page = pgparse.web_escaping(str(request.url_start_page))
+            # _url_end_page = pgparse.web_escaping(str(request.url_end_page))
+
+            _argument = f"page {_url_entity} {_url} {_url_function} {_downloader_intermediate_dir} {_url_start_page} {_url_end_page}"
+        elif request.pg_url_parse_type == "scroll":
+            print(_dirpath)
+            print(_filename)
+
+            _argument = f"scroll {request.url} {os.path.join(request.dirpath, request.filename)}"
+        else:
+            _argument = None
+
+        print(_argument)
+
+        #raise SystemExit("ending here1111111......")
+
+        # print(f"arguments: {self._config['parameters']}")
+        #print(os.path.join(self._config.parameters['config_file']['default']['downloader_binary'], "pgscrapedownloadertest.js"))
+        # raise SystemExit("hello2")
 
         try:
             if Path.exists:
                 if success := execute_js(file_path=os.path.join(self._config.parameters['config_file']['default']['downloader_binary'], "pgscrapedownloadertest.js"), arguments=_argument):
                 #if True:
-                    print("successfully acquired the data ")
-                    with open(os.path.join(dirpath, filename)) as file:
+                    if request.pg_url_parse_type == "page":
+
+                        #raise SystemExit("ending here......")
+                        print("successfully acquired the data ")
+                        # _pg_file_in_dir = []
+                        # _test_dir = "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/intermediate/77efc2"
+                        # for filename in pgdirectory.files_in_dir("/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/intermediate/77efc2"):
+                        #     with open(os.path.join("/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/intermediate/77efc2", filename)) as file:
+                        #         _pg_file_in_dir.append(file.read().encode("utf-8"))
+                        # print(len(_pg_file_in_dir))
+                        # request.output = _pg_file_in_dir
                         return HtmlResponse(url=request.url,
                                             status=200,
                                             headers=None,
-                                            body=file.read().encode("utf-8"),
+                                            body=_downloader_intermediate_dir.encode("utf-8"),
                                             encoding='utf-8',
                                             request=request)
+                        #
+                        # return HtmlResponse(url=request.url,
+                        #                         status=200,
+                        #                         headers=None,
+                        #                         body=["testHAHA"],
+                        #                         encoding='utf-8',
+                        #                         request=request)
+                    elif request.pg_url_parse_type == "scroll":
+                        return HtmlResponse(url=request.url,
+                                            status=200,
+                                            headers=None,
+                                            body=os.path.join(_dirpath, _filename).encode("utf-8"),
+                                            encoding='utf-8',
+                                            request=request)
+
+                        # raise SystemExit("ending here222222......")
+                        # with open(os.path.join(_dirpath, _filename)) as file:
+                        #     return HtmlResponse(url=request.url,
+                        #                         status=200,
+                        #                         headers=None,
+                        #                         body=file.read().encode("utf-8"),
+                        #                         encoding='utf-8',
+                        #                         request=request)
 
                 else:
                     print("failed to acquire data")

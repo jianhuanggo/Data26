@@ -1,13 +1,15 @@
 import scrapy
+import inspect
 
-from Data.Utils import pgyaml, pgfile
+
+from Data.Utils import pgyaml, pgfile, pgdirectory
 #from WebScraping import pgwebscrapingcommon
 from pprint import pprint
 from ..items import PgscrapyItem, PgscrapyPastActivityItem, PgscrapyAuctions, PgscrapyGeneral
 from scrapy.loader import ItemLoader, Item
 from scrapy import Field, Item
 from typing import List, Dict, Union
-
+from Meta import pggenericfunc
 #from Meta import pgclassdefault
 
 """
@@ -84,6 +86,7 @@ class PGScrapy(scrapy.Spider):
         print(f"arguments: {self._pg_arguments}")
 
 
+
     #download_delay = 5.0
     # start_urls = ['https://www.realtor.com/soldhomeprices/Johns-Creek_GA']
     # Request.meta has dont_obey_robotstxt
@@ -118,18 +121,59 @@ class PGScrapy(scrapy.Spider):
             self._config['parameters'] = pgyaml.yaml_load(yaml_filename=__file__.split('.')[0] + ".yml")
         # self._switch = self._config['parameters'].get('content', 'None')
         # print(self._switch)
+        print(self._config['parameters'])
+        #raise SystemExit("ends here.....")
 
-        for url_item in zip(self._config['parameters'].get('url_list', 'None'), self._config['parameters'].get('url_name', 'None')):
-            #print(url_item)
+        if isinstance(self._config['parameters'].get('url_list', None), str):
+            _pg_url_list = [self._config['parameters'].get('url_list', None)]
+        else:
+            _pg_url_list = self._config['parameters'].get('url_list', None)
+
+        if isinstance(self._config['parameters'].get('url_name', None), str):
+            _pg_url_name = [self._config['parameters'].get('url_name', None)]
+        else:
+            _pg_url_name = self._config['parameters'].get('url_name', None)
+
+        _pg_downloader_intermediate_dir = self._config["parameters"].get("downloader_intermediate_dir", None)
+
+        _pg_url_parse_type = self._config["parameters"].get("url_parse_type", None)
+
+        if _pg_url_list is None:
+            raise SystemExit("url list is not identified!!!")
+
+        if _pg_url_name is None:
+            raise SystemExit("url name is not identified!!!")
+
+        if _pg_downloader_intermediate_dir is None:
+            raise SystemExit("downloader intermediate dir is not identified!!!")
+
+
+        #self._config["parameters"].get("downloader_intermediate_dir", "")
+
+        for url_item in zip(_pg_url_list, _pg_url_name):
+            ### common settings
             _req = scrapy.Request(f"{url_item[0]}", self.pg_parser)
+            _req.pageitem = _metadata.get(url_item[1])
+            _req.pagetag = url_item[1]
+
+            #print(url_item)
+
             #_req.dirpath = "/home/pant/anaconda3/envs/pgscrapydownloader_1/data"
             #_req.filename = f"{pgfile.get_random_filename('job')}.html"
 
-            _req.dirpath = self._config["parameters"].get("downloader_intermediate_dir", "")
-            _req.filename = f"{pgfile.get_random_filename('pgdownloader')}.html"
+            ### specific settings
+            if _pg_url_parse_type and _pg_url_parse_type.lower() == "page":
+                _req.pg_url_parse_type = "page"
+                _req.downloader_intermediate_dir = pgdirectory.get_random_directory2(_pg_downloader_intermediate_dir)
+                _req.url_entity = self._config['parameters'].get('url_entity', None)
+                _req.url_function = self._config['parameters'].get('url_function', None)
+                _req.url_start_page = self._config['parameters'].get('url_start_page', 1)
+                _req.url_end_page = self._config['parameters'].get('url_end_page', 5)
+            else:
+                _req.pg_url_parse_type = "scroll"
+                _req.dirpath = _pg_downloader_intermediate_dir
+                _req.filename = f"{pgfile.get_random_filename('pgdownloader')}.html"
 
-            _req.pageitem = _metadata.get(url_item[1])
-            _req.pagetag = url_item[1]
             yield _req
 
     def pg_parser(self, response):
@@ -139,20 +183,32 @@ class PGScrapy(scrapy.Spider):
                 item.fields[f] = Field()
             return item
 
-        _pg_item_fields = None
+        try:
 
-        for _, pg_item in response.content_json.items():
-            _pg_item_fields = [index for index, value in pg_item.items()]
+            _pg_item_fields = None
 
-        print(_pg_item_fields)
+            print(response.content_json)
+            #raise SystemExit("continue here.......")
 
-        item_inst = generate_item(_pg_item_fields)
-        print(type(item_inst))
+            for _, pg_item in response.content_json[0].items():
+                _pg_item_fields = [index for index, value in pg_item.items()]
 
-        for _, pg_item in response.content_json.items():
-            for index, value in pg_item.items():
-                item_inst[index] = value
-            yield item_inst
+            print(_pg_item_fields)
+
+            item_inst = generate_item(_pg_item_fields)
+            print(type(item_inst))
+
+            #raise SystemExit("continue here.......")
+            for _each_page in response.content_json:
+                for _, pg_item in _each_page.items():
+                    for index, value in pg_item.items():
+                        item_inst[index] = value
+                    yield item_inst
+
+        except Exception as err:
+            pggenericfunc.pg_error_logger(None, inspect.currentframe().f_code.co_name, err)
+        return None
+
 
         #new_response = response
 

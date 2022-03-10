@@ -216,6 +216,7 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
     #
     #         #return _entire_finding, _find_num_record(_entire_finding)
 
+
     def pg_data_acquisition(self, filepath: str,
                             custom_validate=None,
                             top_data_num: int = 1):
@@ -360,7 +361,6 @@ class PGWebScrapingFormatter(pgscrapyformatterbase.PGScrapingFormatterBase, pgsc
             return [_sorted_parsed_content[0][1]]
 
         return _find_num_record(pg_content, custom_validate())
-
 
     def pg_extract_data(self, pg_data, custom_parser=None):
         custom_parser = pg_default_formatter if custom_parser is None else custom_parser

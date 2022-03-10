@@ -80,6 +80,10 @@ def get_random_directory(directory):
     return dir_path + '/' + random_directory
 
 
+def get_random_directory2(directory: str) -> str:
+    return os.path.join(directory, str(uuid.uuid4().hex[:6]))
+
+
 def rename_directory(src_dir: str, dest_dir: str) -> bool:
     try:
         shutil.move(src_dir, dest_dir)

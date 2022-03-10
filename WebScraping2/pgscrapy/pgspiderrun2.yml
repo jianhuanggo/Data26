@@ -1,3 +1,3 @@
-log_dir: "/data/mydata/pg_logs/panini"
+log_dir: "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/activity"
+data_dir: "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/activity"
 
-data_dir: "/data/mydata/pg_data/panini"

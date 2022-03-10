@@ -1,0 +1,9 @@
+downloader_intermediate_dir: "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/intermediate/"
+
+url_parse_type: "page"
+url_list: "https://www.paniniamerica.net/blockchain/public-auctions?sport=ufc&sortBy=new"
+url_name: "panini_auction"
+url_entity: "ufc"
+url_function: "panini"
+url_start_page: 1
+url_end_page: 5

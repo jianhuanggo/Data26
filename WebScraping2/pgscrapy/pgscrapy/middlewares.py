@@ -22,7 +22,7 @@ from pgscrapyext.pgscrapydownloader import pgscrapydownloader
 from pgscrapyext.pgscrapyformatter import pgscrapyformatter
 # from pgscrapyext.pgscrapyformatter.pgscrapyformatter import pg_custom_paniniamerica_checker, \
 #     pg_custom_paniniamerica_recent_sales_formatter, pg_custom_paniniamerica_activity_header, pg_custom_paniniamerica_activity_formatter
-from Meta import pggenericfunc
+from Data.Utils import pgdirectory
 #from pgmeta import pgmeta
 
 logging.getLogger('websockets').setLevel(logging.WARNING)
@@ -109,9 +109,9 @@ class PgWebScrapingJSDownloaderMiddleware:
         try:
 
             #x = PgscrapyPastActivityItem()
-            Path(os.path.join(request.dirpath, request.filename))
+            #Path(os.path.join(request.dirpath, request.filename))
             if Path.exists:
-                return pgscrapydownloader.PGWebScrapingDownloaderExt().run_scrapy(request, request.dirpath, request.filename)
+                return pgscrapydownloader.PGWebScrapingDownloaderExt().run_scrapy(request)
 
                 #return self.loop.run_until_complete(pgscrapydownloader.PGWebScrapingDownloader().process("test"))
 
@@ -130,12 +130,58 @@ class PgWebScrapingJSDownloaderMiddleware:
         # - return a Request object
         # - or raise IgnoreRequest
 
-        print(request.dirpath)
+        #print(request.dirpath)
         print("I'm here AAAAAAAA")
-        print(request.filename)
+        #print(request.filename)
         #_content = response.body.decode('utf-8')
 
-        _soup = BeautifulSoup(response.body.decode('utf-8'), 'html.parser')
+        #print(f"the content length is {len(response.request.output)}")
+        #raise SystemExit("trying.........")
+
+        """
+            _soup = BeautifulSoup(response.body.decode('utf-8'), 'html.parser')
+    
+    
+            #_entire_finding = _soup.find_all("div")
+            #print(_entire_finding)
+            #_entire_finding = _content.find_all("div")
+    
+            #print(response.body)
+            #print(_entire_finding)
+    
+            pgformatter = pgscrapyformatter.PGWebScrapingFormatterExt()
+            #print(os.path.join(request.dirpath, request.filename))
+            #_parse_content = pgformatter.scrapy_run(_soup.find_all("div"), pg_custom_paniniamerica_checker, pg_custom_paniniamerica_recent_sales_formatter)
+            _parse_content = pgformatter.scrapy_run(_soup.find_all("div"), request.pagetag, request.pagetag)
+            response.content_json = _parse_content
+            response.pageitem = request.pageitem
+            
+        """
+
+        pgformatter = pgscrapyformatter.PGWebScrapingFormatterExt()
+        _parse_content_lst = []
+        print(f"directory path is {response.body.decode('utf-8')}")
+
+        ### assume it is a file if the path is not a directory
+        if pgdirectory.isdirectoryexist(response.body.decode('utf-8')):
+            for filename in pgdirectory.files_in_dir(response.body.decode('utf-8')):
+                print(filename)
+                with open(os.path.join(response.body.decode('utf-8'), filename)) as file:
+                    _soup = BeautifulSoup(file.read(), 'html.parser')
+                    _parse_content_lst.append(pgformatter.scrapy_run(_soup.find_all("div"), request.pagetag, request.pagetag))
+        else:
+            with open(os.path.join(response.body.decode('utf-8'))) as file:
+                _soup = BeautifulSoup(file.read(), 'html.parser')
+                _parse_content_lst.append(
+                    pgformatter.scrapy_run(_soup.find_all("div"), request.pagetag, request.pagetag))
+
+        # for item in response.request.output:
+        #     _soup = BeautifulSoup(item.decode('utf-8'), 'html.parser')
+        #     _parse_content_lst.append(pgformatter.scrapy_run(_soup.find_all("div"), request.pagetag, request.pagetag))
+        print(len(_parse_content_lst))
+
+        #raise SystemExit("ending here3333333......")
+
         #_entire_finding = _soup.find_all("div")
         #print(_entire_finding)
         #_entire_finding = _content.find_all("div")
@@ -143,12 +189,13 @@ class PgWebScrapingJSDownloaderMiddleware:
         #print(response.body)
         #print(_entire_finding)
 
-        pgformatter = pgscrapyformatter.PGWebScrapingFormatterExt()
+
         #print(os.path.join(request.dirpath, request.filename))
         #_parse_content = pgformatter.scrapy_run(_soup.find_all("div"), pg_custom_paniniamerica_checker, pg_custom_paniniamerica_recent_sales_formatter)
-        _parse_content = pgformatter.scrapy_run(_soup.find_all("div"), request.pagetag, request.pagetag)
-        response.content_json = _parse_content
+
+        response.content_json = _parse_content_lst
         response.pageitem = request.pageitem
+
         return response
 
     def process_exception(self, request, exception, spider):
