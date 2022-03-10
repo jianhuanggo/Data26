@@ -1,0 +1,40 @@
+url_list: "https://www.paniniamerica.net/blockchain/public-auctions?sport=Basketball&sortBy=new"
+
+
+
+in pgscrapydownloader.ini:
+
+downloader_binary = /data/mydata/envs/pgscrapydownloader_2
+downloader_binary = /Users/jianhuang/opt/anaconda3/envs/pgscrapydownloader_2
+
+
+
+in pgspiderrun2.yml:
+
+log_dir: "/data/mydata/pg_logs/panini"
+data_dir: "/data/mydata/pg_data/panini"
+log_dir: "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/activity"
+data_dir: "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/activity"
+
+
+
+in panini_public_activity.yml:
+
+downloader_intermediate_dir: "/data/mydata/pg_data/panini/intermediate"
+downloader_intermediate_dir: "/Users/jianhuang/opt/anaconda3/envs/pg_data/panini/intermediate"
+
+
+
+
+
+
+python /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgspiderrun2.py -i /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgscrapy/pg_spider_request/panini_public_auctions_basketball.yml -d /Users/jianhuang/opt/anaconda3/envs/pg_data/panini/auctions/basketball
+
+
+python /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgspiderrun2.py -i /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgscrapy/pg_spider_request/panini_public_auctions_football.yml -d /Users/jianhuang/opt/anaconda3/envs/pg_data/panini/auctions/football
+
+
+python /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgspiderrun2.py -i /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgscrapy/pg_spider_request/panini_public_auctions_ufc.yml -d /Users/jianhuang/opt/anaconda3/envs/pg_data/panini/auctions/ufc
+
+
+python /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgspiderrun2.py -i /Users/jianhuang/opt/anaconda3/envs/Data35/Data26/WebScraping2/pgscrapy/pgscrapy/pg_spider_request/panini_public_activity_all.yml -d /Users/jianhuang/opt/anaconda3/envs/pg_data/panini/activity
