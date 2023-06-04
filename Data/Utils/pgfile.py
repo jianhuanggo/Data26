@@ -79,6 +79,14 @@ def filename_remove_space(filename: str):
     return '-'.join(filename.split())
 
 
+def pg_save_file(filepath: str, data: Any):
+    with open(filepath, "w") as file:
+        file.write(data)
+
+def pg_read_file(filepath) -> str:
+    with open(filepath) as file:
+        return file.read()
+
 if __name__ == '__main__':
 
     for item in get_all_file_in_dir("/Users/jianhuang"):
